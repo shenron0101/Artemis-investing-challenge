@@ -1,5 +1,6 @@
 # Python
 .venv/
+01_Data_Collection/.venv/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -18,6 +19,39 @@ build/
 data/raw/
 data/interim/
 data/processed/*.parquet
+01_Data_Collection/data/raw/
+01_Data_Collection/data/clean/*.parquet
+01_Data_Collection/data/clean/*.csv
+01_Data_Collection/data/logs/
+
+# Large local exports / snapshots
+01_Data_Collection/data/export/
+01_Data_Collection/data/tmp/
+01_Data_Collection/data/cache/
+
+# Archives and packaged artifacts (often very large)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.bz2
+*.7z
+*.rar
+
+# Database/data dumps
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+
+# ML / binary artifacts
+*.onnx
+*.pt
+*.pth
+*.bin
+*.npy
+*.npz
+*.feather
 
 # Keep processed CSVs (small results files)
 !data/processed/*.csv

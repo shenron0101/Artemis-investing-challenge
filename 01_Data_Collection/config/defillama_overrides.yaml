@@ -1,0 +1,141 @@
+# DeFiLlama symbol → slug overrides
+#
+# Why this file exists:
+#   The DeFiLlama /protocols list does not have a clean "this token == this protocol" mapping.
+#   Auto-matching by symbol or by gecko_id picks up Foundations, Bridges, Treasuries, CEX
+#   entries, and stale v1 forks instead of the canonical DeFi protocol the user cares about.
+#
+# Resolution order in pipeline._pull_defillama:
+#   1. `overrides[symbol]`  -> use these slugs (single or list). Highest priority.
+#   2. `skip` set            -> explicitly do not query DeFiLlama for this symbol.
+#   3. gecko_id fallback     -> only kept if the protocol's `category` is in
+#                               settings.defillama.allowed_fallback_categories.
+#   4. Otherwise             -> mark as unmapped (no DeFiLlama row written).
+#
+# When a list is supplied, the pipeline pulls every slug and emits one row per slug per
+# data_type. Use lists where multiple versions are economically meaningful (e.g. Aave V2/V3,
+# Uniswap V2/V3/V4, Hyperliquid bridge + HLP).
+
+overrides:
+  AAVE:    [aave-v3, aave-v2]
+  UNI:     [uniswap-v3, uniswap-v2, uniswap-v4]
+  CAKE:    [pancakeswap-amm, pancakeswap-amm-v3]
+  MORPHO:  morpho-blue
+  ENA:     ethena-usde
+  USDE:    ethena-usde
+  ONDO:    [ondo-yield-assets, ondo-global-markets]
+  HYPE:    [hyperliquid-bridge, hyperliquid-hlp, hyperliquid-spot-orderbook]
+  LINK:    chainlink-requests
+  PUMP:    pumpswap
+  JUP:     [jupiter-perpetual-exchange, jupiter-lend]
+  JST:     justlend
+  DAI:     sky-lending
+  USDS:    sky-lending
+  SKY:     sky-lending
+
+# Symbols that should NEVER be queried against DeFiLlama
+# (chain native tokens, CEX tokens, RWA / gold-backed, stablecoins-as-issuer-only, memes,
+#  governance-only tokens). These have no actionable on-chain DeFi protocol entry.
+skip:
+  # Layer-1 / L2 / chain native (DeFiLlama treats the chain entry as Bridge/Foundation, useless for fees)
+  - BTC
+  - ETH
+  - BNB
+  - SOL
+  - TRX
+  - XRP
+  - ADA
+  - DOGE
+  - TON
+  - LTC
+  - AVAX
+  - HBAR
+  - SUI
+  - ALGO
+  - ATOM
+  - APT
+  - NEAR
+  - ICP
+  - ETC
+  - FIL
+  - VET
+  - DASH
+  - ZEC
+  - BCH
+  - XMR
+  - PI
+  - KAS
+  - LUNC
+  - FLR
+  - XDC
+  - XLM
+  - DOT
+  - MNT
+  - ARB
+  - STX
+  - CC
+  - CRO
+  - POL
+  - SHIB
+  # CEX tokens (no on-chain DeFi role)
+  - LEO
+  - WBT
+  - OKB
+  - GT
+  - HTX
+  - KCS
+  - BGB
+  - NEXO
+  # Pure stablecoins where DeFiLlama tracks supply via /stablecoins, not /protocols
+  - USDT
+  - USDC
+  - TUSD
+  - PYUSD
+  - USD1
+  - USDF
+  - USDD
+  - USDY
+  - BFUSD
+  - RLUSD
+  - USDTB
+  - USDM
+  - USYC
+  - GHO
+  - USD0
+  # RWA / gold / treasury tokens
+  - PAXG
+  - XAUT
+  - BUIDL
+  - JTRSY
+  - EUTBL
+  - OUSG
+  - YLDS
+  - BCAP
+  - FIGR_HELOC
+  - USTB
+  - U
+  # Meme / governance-only / non-DeFi project tokens
+  - PEPE
+  - BONK
+  - TRUMP
+  - WLFI
+  - HASH
+  - NIGHT
+  - SIREN
+  - BDX
+  - VVV
+  - STABLE
+  - ASTER
+  - M
+  - A7A5
+  - SKYAI
+  - VIRTUAL
+  - FET
+  - RENDER
+  - QNT
+  - CHZ
+  - DEXE
+  - RAIN
+  - PENGU
+  - WLD
+  - TAO

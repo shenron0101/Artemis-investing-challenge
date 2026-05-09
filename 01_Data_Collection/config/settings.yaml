@@ -1,0 +1,66 @@
+project:
+  name: artemis_track1_data_collection
+  timezone: UTC
+
+universe:
+  coins_markdown_path: ../Coins.md
+  include_cohorts:
+    - large_cap
+    - mid_cap_strict
+    - below_large_top100_ext
+
+coingecko:
+  per_page: 250
+  max_pages: 8
+  request_sleep_seconds: 1.2
+  ids_batch_size: 150
+  daily_lookback_days: 365
+
+binance:
+  quote_priority:
+    - USDT
+    - FDUSD
+    - BUSD
+    - USDC
+  interval: 1d
+  lookback_days: 365
+  kline_limit: 1000
+
+artemis:
+  request_sleep_seconds: 0.75
+  symbols_batch_size: 40
+  date_lookback_days: 365
+  metric_keywords:
+    - transactions
+    - real transactions
+    - volume
+    - real volume
+    - cumulative buyers
+    - cumulative sellers
+    - gamed transactions
+    - gamed volume
+    - avg transaction size
+    - dau
+    - active addresses
+    - fees
+    - revenue
+    - active revenue
+    - passive revenue
+  # Artemis /data/{metrics}/?dimensionType=... does NOT currently return per-dimension
+  # broken-down series for our universe — same flat shape as the non-dim call, with
+  # 'Metric not available for asset.' sentinels on most pairs. Re-enable once the
+  # correct endpoint/parameter is identified (see REMAINING.md P0 #2).
+  dimension_types: []
+  # dimension_types:
+  #   - CHAIN
+  #   - CATEGORY
+  #   - PROTOCOL
+  #   - VERSION
+
+defillama:
+  enabled: true
+  request_sleep_seconds: 0.4
+
+storage:
+  write_parquet: true
+  write_csv: true
