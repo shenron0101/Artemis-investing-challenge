@@ -66,3 +66,7 @@ Thumbs.db
 # Reports (generated outputs, not source)
 reports/*.pdf
 reports/*.html
+
+# Images and HTML (generated/output files)
+*.png
+*.html
