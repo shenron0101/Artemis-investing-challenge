@@ -2,7 +2,7 @@
 
 Single canonical reference for what data the pipeline currently produces, plus the outstanding gaps. Read this before writing any analysis.
 
-- Pipeline run id covered: `20260509T090254Z` (pulled `2026-05-09T09:02:54+00:00`)
+- Pipeline run id covered: `20260510T085321Z` (pulled `2026-05-10T08:53:21+00:00`)
 - All clean tables live in `01_Data_Collection/data/clean/` as paired `*.parquet` + `*.csv`. The parquet file is canonical; CSV is a convenience.
 - Universe: 113 symbols (13 large-cap, 57 mid-cap, 43 below-large-top-100), defined in `Coins.md`.
 
@@ -24,37 +24,37 @@ Single canonical reference for what data the pipeline currently produces, plus t
 
 | Table | Rows | Date range | Key cols | Notes |
 |---|---:|---|---|---|
-| `coingecko_market_snapshot.parquet` | 111 | 2026-05-09 only | 31 cols incl. `current_price`, `market_cap`, `fdv`, `ath`, `atl`, 24h/7d/30d change | Current state, not a time series. Use for ranking and exclusion. |
-| `coingecko_daily_ticks.parquet` | 38,173 | 2025-05-09 → 2026-05-09 | `date`, `coingecko_id`, `price_usd`, `market_cap_usd`, `total_volume_usd` | The default return / market-cap time series. ~344 days × 111 ids. |
-| `binance_ohlcv_daily.parquet` | 22,464 | 2025-05-10 → 2026-05-09 | `binance_symbol`, OHLC, `base_volume`, `quote_volume`, `trade_count` | Clean OHLCV for the 68 Binance-listed names. Use for ATR / Trend (T) factor — daily ticks have no high/low. |
+| `coingecko_market_snapshot.parquet` | 111 | 2026-05-10 only | 31 cols incl. `current_price`, `market_cap`, `fdv`, `ath`, `atl`, 24h/7d/30d change | Current state, not a time series. Use for ranking and exclusion. |
+| `coingecko_daily_ticks.parquet` | 38,200 | 2025-05-09 → 2026-05-10 | `date`, `coingecko_id`, `price_usd`, `market_cap_usd`, `total_volume_usd` | The default return / market-cap time series. ~344 days × 111 ids. Hard-capped at 365 days by CoinGecko free API; fetched in 365-day chunks with per-chunk caching. |
+| `binance_ohlcv_daily.parquet` | 84,848 | 2021-05-12 → 2026-05-10 | `binance_symbol`, OHLC, `base_volume`, `quote_volume`, `trade_count` | Clean OHLCV for the 68 Binance-listed names. **Extended to 5 years** (1,825 days) with paginated kline fetching. Use for ATR / Trend (T) factor — daily ticks have no high/low. |
 
 ### On-chain activity (Artemis)
 
 | Table | Rows | Date range | Key cols | Notes |
 |---|---:|---|---|---|
-| `artemis_activity_metrics.parquet` | 41,471 | 2025-05-09 → 2026-05-09 | wide: `dau`, `fees`, `revenue`, `volume`, `transactions`, ... | Wide format. **Many columns are entirely null** — see "metric coverage" below. |
-| `artemis_activity_long.parquet` | 75,086 | 2025-05-09 → 2026-05-09 | `date`, `symbol`, `metric`, `value` | Long format, one row per (symbol, metric, date). 12 metrics requested, 6 with usable data. |
+| `artemis_activity_metrics.parquet` | 206,451 | 2021-05-11 → 2026-05-10 | wide: `dau`, `fees`, `revenue`, `volume`, `transactions`, ... | Wide format. **Many columns are entirely null** — see "metric coverage" below. **Extended to 5 years** this run. |
+| `artemis_activity_long.parquet` | 371,831 | 2021-05-11 → 2026-05-10 | `date`, `symbol`, `metric`, `value` | Long format, one row per (symbol, metric, date). 12 metrics requested, 6 with usable data. **Extended to 5 years** this run. |
 
-**Artemis metric coverage** (% missing in `artemis_activity_long.value` after `pd.to_numeric` coercion of the `'Metric not available for asset.'` sentinel):
+**Artemis metric coverage** (% missing in `artemis_activity_long.value` after `pd.to_numeric` coercion of the `'Metric not available for asset.'` sentinel). Null % is higher than the previous 1-year run because earlier dates had fewer protocols tracked by Artemis — absolute non-null row counts are larger.
 
-| Metric | % null | Verdict |
-|---|---:|---|
-| `dau` | 11.5% | usable (top metric for activity work) |
-| `fees` | 3.6% | usable |
-| `revenue` | 3.9% | usable |
-| `passive_revenue` | 4.1% | usable |
-| `active_revenue` | 8.8% | usable |
-| `volume` | 13.6% | usable but thinner |
-| `active_addresses` | 100% | empty — Artemis returns sentinel for every (symbol, day) |
-| `real_volume`, `real_transactions`, `transactions`, `gamed_volume_pct`, `gamed_transactions_pct` | 100% | empty — sentinel only |
+| Metric | % null | Non-null rows | Verdict |
+|---|---:|---:|---|
+| `dau` | 27.8% | ~79,200 | usable (top metric for activity work) |
+| `active_revenue` | 16.7% | ~22,900 | usable |
+| `fees` | 23.4% | ~54,600 | usable |
+| `passive_revenue` | 25.3% | ~58,700 | usable |
+| `revenue` | 26.3% | ~59,300 | usable |
+| `volume` | 33.6% | ~2,500 | usable but thinner |
+| `active_addresses` | 100% | 0 | empty — Artemis returns sentinel for every (symbol, day) |
+| `real_volume`, `real_transactions`, `transactions`, `gamed_volume_pct`, `gamed_transactions_pct` | 100% | 0 | empty — sentinel only |
 
-**Implication:** the "real vs gamed" usage-quality story is **not** currently available from Artemis at the symbol level. The activity stack we can actually visualise is `dau`, `fees`, `revenue`, `volume` (+ `active_revenue` / `passive_revenue` for the revenue split).
+**Implication:** the "real vs gamed" usage-quality story is **not** currently available from Artemis at the symbol level. The activity stack we can actually visualise is `dau`, `fees`, `revenue`, `volume` (+ `active_revenue` / `passive_revenue` for the revenue split). The 5-year window means earlier dates are sparse — filter by date when computing rolling signals to avoid survivorship bias.
 
 ### Protocol economics (DeFiLlama)
 
 | Table | Rows | Date range | Key cols | Notes |
 |---|---:|---|---|---|
-| `defillama_protocol_tvl_daily.parquet` | 21,951 | 2019-01-04 → 2026-05-09 | `date`, `defillama_slug`, `tvl_usd` | TVL history for 19 slugs. Some go back to 2019 (Aave, Uniswap); newer protocols (Hyperliquid, Pumpswap, Sky) start in 2024-25. |
+| `defillama_protocol_tvl_daily.parquet` | 21,969 | 2019-01-04 → 2026-05-10 | `date`, `defillama_slug`, `tvl_usd` | TVL history for 19 slugs. Some go back to 2019 (Aave, Uniswap); newer protocols (Hyperliquid, Pumpswap, Sky) start in 2024-25. |
 | `defillama_fees_revenue_summary.parquet` | 51 | snapshot | `defillama_slug`, `data_type` ∈ {`dailyFees`, `dailyRevenue`, `dailyHoldersRevenue`}, `total24h`, `total7d`, `total30d`, `totalAllTime`, change cols | Aggregates only — no time series for fees yet (P2 #9 in the punch-list). |
 
 ### QA
@@ -63,21 +63,21 @@ Single canonical reference for what data the pipeline currently produces, plus t
 |---|---:|---|
 | `coverage_summary.parquet` | 1 | One row per pipeline run summarising volumes per stage. |
 
-**Latest coverage row** (`run_id=20260509T090254Z`):
+**Latest coverage row** (`run_id=20260510T085321Z`):
 
 | field | value |
 |---|---:|
 | universe_assets | 113 |
 | coingecko_mapped_assets | 111 |
-| coingecko_daily_ticks_rows | 38,173 |
+| coingecko_daily_ticks_rows | 38,200 |
 | binance_mapped_assets | 68 |
-| binance_ohlcv_rows | 22,464 |
+| binance_ohlcv_rows | 84,848 |
 | defillama_mapped_protocols | 23 |
-| defillama_tvl_rows | 21,951 |
+| defillama_tvl_rows | 21,969 |
 | defillama_fees_rows | 51 |
 | artemis_assets_rows | 1,009 |
-| artemis_activity_rows | 41,471 |
-| artemis_activity_long_rows | 75,086 |
+| artemis_activity_rows | 206,451 |
+| artemis_activity_long_rows | 371,831 |
 
 ---
 
@@ -116,13 +116,14 @@ fees    = pd.read_parquet(CLEAN / "defillama_fees_revenue_summary.parquet")
 
 - `_extract_artemis_rows` coerces nested dict/list values; the `value` column is then `pd.to_numeric(errors="coerce")` so Artemis's `'Metric not available for asset.'` sentinel no longer breaks parquet write.
 - `coingecko_coin_details` emits derived `is_stablecoin`, `is_wrapped`, `is_bridged` flags (universe exclusion).
-- Artemis monetization metrics (`fees`, `revenue`, `active_revenue`, `passive_revenue`) live in `artemis_activity_long` (12 metrics total, 75,086 rows, 92.6% non-null).
+- Artemis monetization metrics (`fees`, `revenue`, `active_revenue`, `passive_revenue`) live in `artemis_activity_long` (12 metrics total, 371,831 rows over 5 years).
 - New **DeFiLlama** client + stage. Outputs:
   - `defillama_protocol_map` — universe → DeFiLlama slug, with `mapping_source` audit column (`override` / `gecko_id_fallback` / `skipped` / `unmapped`).
   - `defillama_protocol_tvl_daily` — daily TVL per protocol.
   - `defillama_fees_revenue_summary` — 24h / 7d / 30d / all-time + change for `dailyFees`, `dailyRevenue`, `dailyHoldersRevenue`.
 - **DeFiLlama mapping rebuilt around `config/defillama_overrides.yaml`** (resolution: overrides → skip set → category-whitelisted gecko_id fallback → unmapped). Drops the noisy auto-match that produced ETH→ethereum-foundation, SOL→solana-farm, BNB→binance-cex, HYPE→hyperliquid-bridge as the only candidate, etc. Result: 23 deliberate DeFi slugs across 15 protocols. 88 symbols explicitly skipped.
-- Latest coverage (no errors): `defillama_mapped_protocols=23, defillama_tvl_rows=21,951, defillama_fees_rows=51`.
+- **Binance and Artemis lookback extended to 5 years (1,825 days).** Binance kline fetch now paginates in 1,000-bar chunks (needed for 5 years × 68 symbols). CoinGecko daily ticks remain at 365 days (free API hard cap) but now use per-year chunk caching — re-runs only re-fetch the current incomplete chunk.
+- Latest coverage (no errors): `binance_ohlcv_rows=84,848, artemis_activity_long_rows=371,831, defillama_tvl_rows=21,969`.
 
 ### Known limitation: Artemis `dimensionType`
 

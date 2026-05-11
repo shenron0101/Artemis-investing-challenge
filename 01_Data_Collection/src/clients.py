@@ -248,3 +248,35 @@ class DefiLlamaClient(BaseClient):
             f"/summary/fees/{slug}",
             params={"dataType": data_type},
         )
+
+    def get_raises(self) -> Any:
+        """All historical fundraising rounds across the full DeFiLlama universe."""
+        return self._request("GET", "/raises")
+
+    def get_unlocks(self, slug: str) -> Any:
+        """Token-emission / unlock schedule for one protocol slug."""
+        return self._request("GET", f"/emission/{slug}")
+
+
+class DefiLlamaStablecoinsClient(BaseClient):
+    """Stablecoin endpoints live on a separate subdomain (stablecoins.llama.fi)."""
+
+    def __init__(
+        self,
+        base_url: str = "https://stablecoins.llama.fi",
+        sleep_seconds: float = 0.4,
+    ):
+        super().__init__(base_url=base_url, sleep_seconds=sleep_seconds)
+
+    def get_stablecoins(self, *, include_prices: bool = True) -> Any:
+        return self._request(
+            "GET",
+            "/stablecoins",
+            params={"includePrices": "true" if include_prices else "false"},
+        )
+
+    def get_stablecoin_charts_all(self) -> Any:
+        return self._request("GET", "/stablecoincharts/all")
+
+    def get_stablecoin_charts_chain(self, chain: str) -> Any:
+        return self._request("GET", f"/stablecoincharts/{chain}")

@@ -19,35 +19,119 @@ Where a source did not expose an explicit dataset or code link, that is stated d
 Source: https://www.sciencedirect.com/science/article/pii/S266682702500057X  
 Local copy: `webpages/S266682702500057X.html`
 
+![Paper 1 explainer](images/paper_explainers/01_bitcoin_onchain_explainer.png)
+
 ### Goals
-- Test whether Bitcoin on-chain data can predict next-day price direction.
-- Organize and classify on-chain features so their predictive value is easier to interpret.
-- Reduce a large feature set before modeling.
-- Compare not just classification accuracy, but downstream trading performance.
+- Ask a simple question: can we use Bitcoin blockchain data to predict whether Bitcoin will go up or down the next day?
+- Find out which kinds of on-chain features are actually useful, instead of assuming all blockchain metrics matter equally.
+- Reduce the number of input variables so the model is not overloaded with noise.
+- Check whether a good prediction model also leads to a good trading strategy.
 
 ### Methodology
-- Uses Bitcoin on-chain data as the predictive input for next-day direction classification.
-- Applies feature-selection or dimensionality-reduction methods including L1 regression, Boruta, and PCA.
-- Tests deep sequence models including CNN-LSTM and TCN.
-- Compares combinations of feature-selection methods and models.
-- Evaluates model outputs through trading simulation rather than stopping at ML metrics.
+- The paper treats the task as a `yes/no` prediction problem:
+  will Bitcoin go up tomorrow or down tomorrow?
+- It begins with `196` on-chain features. These are measurements built from Bitcoin blockchain activity, such as transaction behavior, holder profit or loss state, and value-based chain metrics.
+- Because `196` features is a lot, the authors first try to reduce the feature set using:
+  - `L1` selection
+  - `Boruta`
+  - `PCA`
+- These methods do different things:
+  - `L1` tries to keep only variables with useful predictive power
+  - `Boruta` tries to identify the truly important features by comparing them against randomized versions
+  - `PCA` compresses many variables into a smaller set of summary components
+- After that, they train prediction models, mainly:
+  - `CNN-LSTM`
+  - `TCN`
+  - a simpler benchmark model
+- The idea is:
+  - first choose the best inputs
+  - then see which model uses those inputs most effectively
+- Finally, they do not stop at prediction accuracy. They turn the model outputs into trading strategies such as:
+  - `long-only`
+  - `short-only`
+  - `long-short`
+
+### Factors / inputs used in modeling
+- `Complete-list status`: the paper uses `196` on-chain features, and the full raw list is available in `Appendix A` of the paper. It is too long to duplicate cleanly here, so this report records the exact groups and the exact selected modeling features.
+- The raw feature universe is grouped into five categories:
+  - `Mining`
+  - `Realized Value`
+  - `Unrealized Value`
+  - `Stationarity`
+  - `Activity`
+- The paper’s `Boruta`-selected modeling features are:
+  - `cdd`
+  - `cdd_supply_adjusted`
+  - `rcap_hodl_waves_1d_1w`
+  - `rcap_hodl_waves_1w_1m`
+  - `rcap_hodl_waves_24h`
+  - `loss_sum`
+  - `net_realized_profit_loss`
+  - `price_usd_ohlc_o`
+  - `profit_relative`
+  - `profit_sum`
+  - `realized_loss`
+  - `realized_profits_to_value_ratio`
+  - `realized_profit`
+  - `realized_profit_loss_ratio`
+  - `sopr_adjusted`
+  - `sopr`
+  - `price_ohlc_usd_c`
+  - `mvrv`
+  - `mvrv_z_score`
+  - `net_unrealized_profit_loss`
+  - `unrealized_loss`
+  - `unrealized_profit`
+  - `utxo_loss_count`
+  - `utxo_profit_relative`
+  - `svl_1m_3m`
+- The paper reports that `L1` selected `120` features and `PCA` used reduced components such as `20`, `30`, and `40` components, but the report does not reproduce the full `120`-feature `L1` list.
 
 ### Results
-- Best reported combination: Boruta + CNN-LSTM with 82.03% test accuracy.
-- Realized-value and unrealized-value feature groups were reported as especially predictive.
-- The CNN-LSTM long-short simulation reported a 1682.7% annualized return and 6.47 Sharpe ratio.
+- The best reported combination was `Boruta + CNN-LSTM`.
+- Reported test accuracy: `82.03%`.
+- Reported `F1` score: `0.8201`, which means the model was not only accurate overall but also reasonably balanced in its predictions.
+- The paper says the most useful features mainly came from `realized value` and `unrealized value` groups.
+- In simple terms, those feature groups try to capture questions like:
+  - at what value coins last moved
+  - whether holders are sitting on gains or losses
+  - whether the market may be under profit-taking pressure or stress
+- The paper reports very strong backtest performance for the best trading variant:
+  - `1682.7%` annualized return
+  - `6.47` Sharpe ratio
+- Those numbers are unusually high, so they should be read carefully as backtest results, not guaranteed live performance.
+
+### Plain-language takeaway
+- This paper is saying that Bitcoin’s blockchain contains useful information about market conditions.
+- More specifically, the useful signal did not come from every on-chain metric.
+- It mostly came from features related to holder positioning and valuation state.
+- So the paper’s core lesson is:
+  on-chain data may help, but careful feature selection matters a lot.
 
 ### How we can integrate or extend it
-- Build an on-chain feature pipeline grouped by economic meaning, then run Boruta before sequence modeling.
-- Extend from next-day direction to multiple horizons: intraday, 3-day, and 1-week.
-- Add execution-aware constraints: fees, slippage, liquidity, and turnover limits.
-- Compare against newer sequence models or multimodal models that mix on-chain and market features.
+- Start with a simpler version before using deep learning:
+  build an on-chain feature table and test whether a few well-grouped variables predict future returns.
+- Group features by meaning, for example:
+  - holder profit/loss
+  - exchange flow
+  - activity
+  - supply behavior
+- Run a feature-selection stage first so the final model is easier to interpret.
+- Extend the prediction horizon beyond `1 day` to `3 days` or `1 week`, since those horizons may be more practical.
+- Add realistic trading constraints such as:
+  - fees
+  - slippage
+  - liquidity limits
+  - turnover penalties
 
 ### How to retest it
-- Re-run with strict walk-forward splits and multiple market regimes.
-- Benchmark against simpler baselines: price-only, technical-only, and no-feature-selection variants.
-- Stress test reported trading performance under realistic fees and position sizing.
-- Check whether the same feature groups remain predictive in newer market windows.
+- Re-run the study with strict `walk-forward` testing, so the model is always trained on the past and tested on the future.
+- Compare against simpler baselines:
+  - price-only signals
+  - technical indicators only
+  - on-chain model without feature selection
+- Check whether the best features stay useful in more recent market periods.
+- Apply more realistic assumptions to the backtest, especially around costs and position sizing.
 
 ### Explicit data/code/resources
 - Explicit source type: Bitcoin on-chain data.
@@ -55,40 +139,488 @@ Local copy: `webpages/S266682702500057X.html`
 
 ---
 
-## 2) Systematic Trend-Following with Adaptive Portfolio Construction: Enhancing Risk-Adjusted Alpha in Cryptocurrency Markets
+## 2) A Time-Varying Network for Cryptocurrencies
+Source: https://arxiv.org/pdf/2108.11921
+Local copy: `papers/2108.11921.pdf`
+
+![Paper 2 explainer](images/paper_explainers/02_time_varying_network_explainer.png)
+
+### Goals
+- Understand how cryptocurrencies are connected to each other.
+- Check whether those connections stay fixed or change over time.
+- Group cryptocurrencies into hidden `communities` based on how they move and on what kind of technology they use.
+- See whether those communities help with:
+  - diversification
+  - trading
+  - understanding how information spreads across the market
+
+### Methodology
+- The sample contains `182` cryptocurrencies from `2016-01-01` to `2018-12-31`.
+- The paper builds a `network`.
+- In that network:
+  - each cryptocurrency is a `node`
+  - a link from one coin to another means the past return of one helps predict the future return of the other
+- This is important because the paper is not only asking who moves with whom.
+- It is asking who may help predict whom.
+- To estimate these links, the authors use rolling regressions and `adaptive Lasso`.
+- They also add technology information such as:
+  - hashing algorithm
+  - proof type
+  - other contract or protocol attributes
+- Then they use a method called `dynamic covariate-assisted spectral clustering`.
+- That sounds technical, but the main idea is simple:
+  - `dynamic` means the groups can change over time
+  - `covariate-assisted` means technology information helps the grouping
+  - `clustering` means the method sorts coins into related groups
+- After identifying these communities, the authors test whether the community structure is useful for:
+  - diversification
+  - momentum-style trading
+
+### Factors / inputs used in modeling
+- `Complete-list status`: partial. The paper clearly tells us the main modeled inputs, but it does not provide one compact final list of every expanded dummy variable inside the technology matrix in the extracted text.
+- Return-based network input:
+  - lagged standardized cryptocurrency returns
+  - rolling return cross-predictability links estimated with `adaptive Lasso`
+- Technology / contract covariates named in the paper:
+  - `algorithm` or hashing algorithm
+  - `proof type` / consensus mechanism
+  - `age`
+  - `total coins`
+  - broader `contract attributes`
+- Community-trading signal:
+  - the average return of the other cryptocurrencies in the same estimated community
+- Diversification analysis input:
+  - within-community return correlations
+  - cross-community return correlations
+- Behavioral-control tests mentioned:
+  - `market frictions`
+  - `investor attention`
+  - `macro uncertainty`
+- Practical interpretation:
+  the paper is driven by three input layers:
+  - return network links
+  - technology similarity
+  - community-relative return information
+
+### Results
+- The paper finds that the crypto market is not just one big undifferentiated group.
+- Instead, it appears to split into different communities.
+- These communities help explain how risk and information move across the market.
+- A practical result is that diversification improves when you hold assets from different communities instead of filling a portfolio with coins from the same group.
+- The paper also reports a `community-based momentum` strategy.
+- The idea is:
+  - if related coins in a community have recently done well, another coin in that same community may also do well next
+- Reported average daily return for that strategy: `1.08%`.
+- The paper also says the effect did not reverse after one week and was not explained away by several behavioral-control tests.
+
+### Plain-language takeaway
+- This paper says crypto assets are linked in a structured way.
+- Those links change over time.
+- If you can identify the right groups, you may:
+  - diversify better
+  - build better relative-value or momentum signals
+  - understand how shocks spread across the market
+
+### How we can integrate or extend it
+- Use community labels as dynamic buckets in portfolio construction.
+- Add features such as:
+  - cluster membership
+  - within-cluster momentum
+  - cross-cluster relative strength
+- Extend the technology side with richer crypto-native variables like:
+  - on-chain activity
+  - developer activity
+  - tokenomics
+  - bridge or ecosystem exposure
+- A simpler first implementation would be to build rolling correlation clusters before trying the full original network approach.
+
+### How to retest it
+- Rebuild the sample and rerun the rolling network estimation.
+- Compare three versions:
+  - return-only grouping
+  - technology-only grouping
+  - return-plus-technology grouping
+- Check whether the clustering changes a lot when you change:
+  - lookback windows
+  - network definitions
+  - transaction-cost assumptions
+- Re-test the whole idea on later crypto periods, because the market structure after `2018` may be very different.
+
+### Explicit data/code/resources
+- Explicit data source: CryptoCompare API for daily prices, trading volumes, and contract attributes.
+- No explicit public code link was surfaced in the extracted source.
+
+---
+
+## 3) Dynamic Latent-Factor Model with High-Dimensional Asset Characteristics
+Source: https://arxiv.org/pdf/2405.15721
+Local copy: `papers/2405.15721.pdf`
+
+![Paper 3 explainer](images/paper_explainers/03_dynamic_latent_factor_explainer.png)
+
+### Goals
+- Explain why some crypto assets earn higher returns than others.
+- Use a factor-model framework, but allow the model to work with many asset characteristics at once.
+- Keep only the characteristics that really matter instead of treating every variable as equally important.
+- Test whether inflation-related risk appears to be rewarded in crypto returns.
+
+### Methodology
+- The paper starts from a common asset-pricing idea:
+  returns are driven by a few broad common forces called `factors`.
+- But in this paper, the factors are `latent`, which means they are not directly observed.
+- Instead, the model tries to estimate them from the return data.
+- The paper then says:
+  each coin’s exposure to those hidden factors depends on that coin’s characteristics.
+- Examples of characteristics include market and on-chain style variables, with the paper paying special attention to exchange-flow variables.
+- The challenge is that there are many characteristics.
+- When the number of characteristics is large, ordinary estimation can become unstable or noisy.
+- To handle this, the paper proposes a method called:
+  `Double Selection Lasso Factor Model` or `DSLFM`
+- Very roughly, the method works in stages:
+  - use `Lasso` to shrink away weak variables
+  - use `PCA` to recover hidden common factors
+  - apply extra sparsity control so only the stronger characteristic relationships remain
+- The paper compares this method against benchmark models such as:
+  - a simple `three-factor` model
+  - `PCA`-based latent-factor models
+  - `IPCA`
+- It also extends the framework to ask whether inflation risk carries a premium in crypto.
+
+### Factors / inputs used in modeling
+- `Complete-list status`: partial. The paper states it uses `63` asset characteristics, but the full 63-variable panel is not cleanly listed in the extracted main text we relied on. What we do know exactly is:
+- Core model structure:
+  - latent common factors estimated from returns
+  - time-varying asset characteristics mapped into factor loadings
+- Benchmark observable factor models named explicitly:
+  - `size`
+  - `illiquidity`
+  - `30 day momentum`
+  - `90 day volatility`
+  - the paper also references a classic crypto three-factor benchmark of:
+    - `crypto market`
+    - `size`
+    - `momentum`
+- Dynamic-model characteristic set:
+  - full panel of `63` characteristics
+  - most important named characteristics:
+    - `exchange inflows`
+    - `exchange outflows`
+- Observable nontradable factor studied:
+  - `10-year expected inflation`
+- Practical interpretation:
+  this paper’s model is not built around a short hand-built factor list. It is built around:
+  - a broad `63`-characteristic panel
+  - latent factors
+  - a sparse variable-selection step that keeps only the most useful characteristics
+
+### Results
+- The paper reports that `DSLFM` works well enough to produce economically meaningful out-of-sample portfolios.
+- However, `IPCA` still achieved the stronger best Sharpe ratio in the reported comparison.
+- Reported best out-of-sample Sharpe:
+  - `DSLFM`: `3.3`
+  - `IPCA`: `4.07`
+- One of the most useful findings is about feature importance.
+- The paper reports that `exchange inflows` and `exchange outflows` were the two most important characteristics.
+- That means exchange-flow information may be especially helpful in explaining differences in crypto returns.
+- The paper also reports a positive inflation risk premium:
+  - `1.4` basis points
+  - standard error `0.0097`
+  - interpreted as roughly `7.3%` annual excess return
+
+### Hidden Risk Factors
+- The hidden factors here are not named things like `value`, `quality`, or `momentum`.
+- They are statistical factors estimated from the data.
+- Their job is to capture the common forces that seem to move many crypto assets at the same time.
+- A useful beginner way to think about this is:
+  - we can see many asset returns
+  - the model assumes there are a few deeper shared forces behind them
+  - those deeper forces are the latent factors
+- The paper does not claim to give each latent factor a clean economic label.
+
+### Plain-language takeaway
+- This paper is less about direct trading signals and more about return structure.
+- Its main message is:
+  crypto returns may be driven by a few hidden common forces, and a small subset of characteristics helps explain which assets are most exposed to those forces.
+- Among those characteristics, exchange-flow variables appear especially important.
+
+### How we can integrate or extend it
+- Use this paper as a template for a cross-sectional crypto return model rather than as a direct signal paper.
+- Focus first on a practical subset of characteristics, especially:
+  - exchange inflows
+  - exchange outflows
+  - size
+  - momentum
+  - volatility
+- Compare a sparse model against simpler baselines before trying the full original method.
+- A student-friendly stepping stone would be:
+  use `PCA` factors plus a smaller set of hand-picked characteristics before moving to a full `DSLFM`.
+
+### How to retest it
+- Rebuild the weekly panel and compare the same benchmark models on a newer sample.
+- Check whether exchange inflow and outflow variables still dominate in later crypto periods.
+- Re-test the inflation result using different inflation proxies or different numbers of factors.
+- See whether the conclusions change when the variable-selection step is made more or less aggressive.
+
+### Explicit data/code/resources
+- Explicit code link: `https://github.com/adambaybutt/crypto_asset_pricing`
+- Explicit data providers mentioned: `Coin Metrics`, `CoinMarketCap`, and `Glassnode`
+- Explicit author page: `http://www.adambaybutt.org/research.html`
+- Reproducibility note: the paper clearly states replication code is available, but full replication likely depends on access to the same underlying data sources, some of which appear to have been purchased or accessed via academic discounts.
+
+---
+
+## 4) Crypto Pricing with Hidden Factors
+Source: https://arxiv.org/pdf/2601.07664
+Local copy: `papers/2601.07664.pdf`
+
+![Paper 4 explainer](images/paper_explainers/04_crypto_pricing_hidden_factors_explainer.png)
+
+### Goals
+- Find out which factors help explain why some cryptocurrencies earn higher returns than others.
+- Test whether crypto returns depend only on crypto-specific factors or also on traditional stock-market factors.
+- Correct for the possibility that simple regressions miss important hidden common risks.
+- Study whether variables like sentiment, altcoin rotation, or hacking shocks help explain expected returns.
+
+### Methodology
+- The paper uses weekly data from `2023-01-01` to `2024-12-31`.
+- The universe contains `253` non-stablecoin cryptocurrencies that were in the top `100` by market capitalization at some point during the sample.
+- This matters because the author is trying to avoid focusing only on today’s winners.
+- The paper then builds several observed factors.
+- On the crypto side, these include:
+  - crypto market
+  - crypto `SMB` or size
+  - crypto momentum
+  - a `TVL`-based factor
+- On the traditional-finance side, the paper includes:
+  - stock-market factors
+  - some industry factors
+  - profitability-style factors from the Kenneth French data library
+- It also includes non-tradable state variables such as:
+  - `Fear & Greed`
+  - `Altcoin Season`
+  - `Hacks / market cap`
+  - `CVX` implied volatility
+- Instead of relying only on a standard `Fama-MacBeth` regression, the paper uses the `Giglio-Xiu (2021)` three-pass framework.
+- The reason is that this framework allows the model to include both:
+  - observed factors
+  - hidden latent factors
+- The paper uses `7` latent factors selected by `Bai-Ng` criteria.
+- Then it compares the latent-factor results with the simpler Fama-MacBeth results.
+
+### Factors / inputs used in modeling
+- `Complete-list status`: mostly known for the observed factors, plus `7` latent factors.
+- Crypto factors constructed directly in the paper:
+  - `RC`: crypto market excess return
+  - `SMBC`: crypto small-minus-big factor
+  - `MomC`: crypto momentum factor
+  - `TVL`: top-minus-bottom long-short portfolio on `TVL / market cap`, orthogonalized to crypto market returns
+- Stock / traditional-market factors explicitly named:
+  - `RS`: stock market excess return
+  - `SMBS`: stock `SMB`
+  - `HMLS`: stock `HML`
+  - `MomS`: stock momentum
+  - `RMW`: stock profitability
+  - `CMA`: stock investment
+  - industry factors mentioned in the paper:
+    - `Softw`
+    - `Chips`
+    - `Fin`
+    - `Banks`
+    - `Insur`
+- Non-tradeable state variables:
+  - `Fear & Greed`
+  - `Altseason`
+  - `Hacks / market cap`
+  - `CVX`
+- Transformations used:
+  - `Fear & Greed` and `Altseason` converted to percent changes
+  - `Hacks` scaled by market cap
+  - `CVX` kept in levels
+  - non-tradeable factors then converted to AR(1) residual shocks
+- Hidden component:
+  - `7` latent factors estimated with the `Giglio-Xiu` framework
+- This is the clearest paper among the five in terms of named observed factors.
+
+### Results
+- The main finding is that the latent-factor approach gives meaningfully different answers from the simple Fama-MacBeth approach.
+- That means hidden common risks matter.
+- If you ignore them, you may mis-measure which factors are actually priced.
+- The paper reports a positive premium for the `crypto market` factor.
+- Reported premium:
+  - latent-factor estimate: `0.471%` per week, about `24.5%` annualized
+  - Fama-MacBeth estimate: `0.164%` per week, about `8.5%` annualized
+- The paper also reports a significantly `negative` premium for crypto `SMB`.
+- In plain English, smaller-cap cryptos underperformed larger-cap cryptos in this sample.
+- Another notable result is that some traditional-market factors appear relevant for crypto pricing, especially:
+  - `Software`
+  - the broad stock market
+  - the stock profitability factor `RMW`
+- For the state variables:
+  - `Fear & Greed` appears relevant
+  - `Hacks` are not significant
+  - `Altseason` becomes insignificant after latent-factor controls
+  - `TVL` does not appear robust as an independent premium once hidden factors are included
+
+### Hidden Risk Factors
+- The hidden factors are statistical common forces extracted from the crypto return data.
+- They are not directly named.
+- So the paper is not saying:
+  factor 1 is regulation, factor 2 is sentiment, factor 3 is liquidity.
+- Instead, it is saying:
+  there are common influences in the data that ordinary observed-factor models miss.
+- These hidden factors are added so the measured premia on the observed factors become more believable.
+
+### Plain-language takeaway
+- This paper says that crypto pricing becomes easier to understand when you allow for hidden common risk.
+- It also suggests crypto may now be more connected to traditional equity-market forces than some earlier papers implied.
+- A beginner-friendly summary is:
+  simple factor regressions may be too naive, because they ignore shared hidden forces across many assets.
+
+### How we can integrate or extend it
+- Use this paper as a framework for mixing:
+  - crypto-native factors
+  - traditional-market factors
+  - hidden-factor controls
+- Re-test whether crypto’s links to software and profitability factors remain strong in newer data.
+- Treat variables like `Fear & Greed` as regime or state indicators rather than automatically turning them into standalone trade signals.
+- A practical student version would be:
+  estimate simple observed factors first, then add PCA-based latent controls and compare the difference.
+
+### How to retest it
+- Rebuild the `2023-2024` weekly panel and estimate:
+  - simple Fama-MacBeth
+  - latent-factor-adjusted results
+- Check whether the traditional-market links remain visible in `2025+` data.
+- Test whether results are sensitive to how factors are built, especially:
+  - `TVL`
+  - crypto `SMB`
+  - momentum
+- See whether the main conclusions change when the number of latent factors changes.
+
+### Explicit data/code/resources
+- Explicit crypto price source: `CoinMarketCap API`
+- Explicit hacked-value source: `DeFiLlama`
+- Explicit implied-volatility source: `thecvx.com`
+- Explicit stock-factor source: `Kenneth French data library`
+- Explicit sentiment/state-variable sources: `CoinMarketCap` Fear & Greed index and Altcoin Season Index
+- Reproducibility note: the extracted paper text did not expose an explicit public code repository, and the paper is marked as a `preliminary draft`.
+
+---
+
+## 5) Systematic Trend-Following with Adaptive Portfolio Construction: Enhancing Risk-Adjusted Alpha in Cryptocurrency Markets
 Source: https://arxiv.org/html/2602.11708v1  
 Local copy: `webpages/2602.11708v1.html`
 
+![Paper 5 explainer](images/paper_explainers/05_adaptive_trend_explainer.png)
+
 ### Goals
-- Improve crypto trend-following using crypto-specific signal generation, universe selection, and allocation.
-- Adapt to volatility regime shifts and a fast-changing tradable universe.
-- Beat standard trend-following and buy-and-hold benchmarks on risk-adjusted terms.
+- Build a trend-following system that is more suitable for crypto than a standard off-the-shelf trend rule.
+- Adapt to the fact that crypto markets change quickly, volatility shifts often, and the tradable universe is not stable.
+- Improve not just returns, but risk-adjusted performance.
 
 ### Methodology
-- Proposes `AdaptiveTrend`, a 3-stage framework: signal generation, asset selection, and capital allocation.
-- Uses 6-hour OHLCV bars and monthly signal-threshold optimization.
-- Uses ATR-based dynamic trailing stops for exits.
-- Rebalances monthly after filtering by market cap and ranking with rolling Sharpe ratio.
-- Allocates capital asymmetrically: 70% long, 30% short, equal-weighted within each side.
-- Evaluates out of sample on 150+ crypto pairs over 2022-2024 with robustness checks on parameters, costs, and regimes.
+- The paper proposes a framework called `AdaptiveTrend`.
+- It has three main parts:
+  - signal generation
+  - asset selection
+  - capital allocation
+- It uses `6-hour` OHLCV data.
+- Instead of using one fixed trading rule forever, it re-optimizes signal thresholds monthly.
+- This is meant to help the system adapt when the market regime changes.
+- For exits, it uses `ATR`-based trailing stops.
+- In simple terms, that means stop levels widen or tighten depending on market volatility.
+- The system also does not trade everything equally.
+- It first filters the universe by market cap, then ranks assets using rolling Sharpe ratio.
+- Capital is allocated asymmetrically:
+  - `70%` to long positions
+  - `30%` to short positions
+- Within each side, positions are equal-weighted.
+- The paper tests the framework on `150+` crypto pairs over `2022-2024`.
+- It also includes robustness checks for parameters, costs, and market regimes.
+
+### Factors / inputs used in modeling
+- `Complete-list status`: mostly known for the trading inputs and decision variables. This is a trading-system paper rather than a classic factor-model paper.
+- Market data inputs:
+  - `6-hour OHLCV` data
+  - tradable universe of `150+` crypto pairs
+- Signal inputs:
+  - `MOM` trend signal on each asset
+  - long entry when `MOM > theta_entry`
+  - short entry when `MOM < -theta_entry^(s)`
+- Risk-management inputs:
+  - `ATR`
+  - `alpha` ATR multiplier for trailing stops
+  - `k` ATR lookback window
+- Portfolio-construction inputs:
+  - `market capitalization` ranking
+  - rolling `Sharpe ratio` filter
+  - top-`K_L = 15` market-cap assets as long-candidate set
+  - bottom-`K_S` market-cap assets as short-candidate set
+  - Sharpe thresholds:
+    - `gamma_L = 1.3`
+    - `gamma_S = 1.7`
+- Re-optimized strategy parameters named explicitly:
+  - `theta_entry`
+  - `alpha`
+  - `L`
+  - `k`
+- Allocation parameter:
+  - `lambda = 0.70` long allocation and `0.30` short allocation in the final system
+- Practical interpretation:
+  the “factors” here are really trading-system inputs:
+  - momentum
+  - volatility via ATR
+  - market-cap filtering
+  - recent Sharpe-based asset selection
+  - asymmetric capital allocation
 
 ### Results
-- Reported annualized Sharpe: 2.41.
-- Reported max drawdown: -12.7%.
-- Reported Calmar ratio: 3.18.
-- The paper reports clear outperformance versus benchmark trend-following and equal-weighted buy-and-hold portfolios.
+- The paper reports the following headline performance numbers:
+  - annualized Sharpe: `2.41`
+  - max drawdown: `-12.7%`
+  - Calmar ratio: `3.18`
+- According to the paper, this was better than both:
+  - benchmark trend-following strategies
+  - equal-weighted buy-and-hold portfolios
+- The point is not just that trend worked.
+- The point is that a more crypto-aware version of trend-following worked better than a basic version.
+
+### Plain-language takeaway
+- This paper is more practical than the others.
+- It says:
+  if you want to trade crypto trends, the details matter.
+- You should think about:
+  - which assets to include
+  - how often to rebalance
+  - how to set stops
+  - how to size the long and short books
+- So the contribution is not one magic indicator.
+- It is a better trading system design.
 
 ### How we can integrate or extend it
-- Use the H6 signal plus monthly universe filter as a practical crypto-system template.
-- Replace equal weights with volatility targeting, risk parity, or correlation-aware sizing.
-- Add liquidity, funding-rate, borrow-availability, or perp-basis filters.
-- Combine trend signals with on-chain or sentiment overlays.
+- Use the paper as a practical template for building a crypto systematic strategy.
+- Keep the broad structure:
+  - signal
+  - universe filter
+  - allocation
+- Improve the allocation step using:
+  - volatility targeting
+  - correlation-aware sizing
+  - liquidity filters
+- Add crypto-specific overlays such as:
+  - perp basis
+  - funding rates
+  - on-chain stress signals
+  - exchange-flow filters
 
 ### How to retest it
-- Reproduce using a clearly specified exchange/API data source with delisted assets preserved.
-- Re-test under different transaction-cost assumptions, especially for smaller-cap names.
-- Run rolling walk-forward optimization to check for monthly overfitting.
-- Break results down by regime, frequency, and market-cap bucket.
+- Reproduce the strategy on a clearly defined dataset and preserve delisted assets if possible.
+- Re-test under stricter cost assumptions, especially for smaller and less liquid names.
+- Check whether monthly threshold re-optimization is genuinely adaptive or just overfitting.
+- Break the performance down by:
+  - bull vs bear periods
+  - large-cap vs small-cap
+  - different rebalance frequencies
 
 ### Explicit data/code/resources
 - Explicit source type: 6-hour OHLCV data across 150+ crypto pairs from 2022-2024.
@@ -96,7 +628,7 @@ Local copy: `webpages/2602.11708v1.html`
 
 ---
 
-## 3) Meta-Learning Reinforcement Learning for Crypto-Return Prediction
+## 6) Meta-Learning Reinforcement Learning for Crypto-Return Prediction
 Source: https://arxiv.org/pdf/2509.09751  
 Local copy: `papers/2509.09751.pdf`
 
@@ -137,47 +669,7 @@ Local copy: `papers/2509.09751.pdf`
 
 ---
 
-## 4) A Time-Varying Network for Cryptocurrencies
-Source: https://arxiv.org/pdf/2108.11921  
-Local copy: `papers/2108.11921.pdf`
-
-### Goals
-- Model evolving linkages among cryptocurrencies through return cross-predictability and technology similarity.
-- Estimate time-varying crypto communities.
-- Test whether community structure helps diversification and cross-sectional trading.
-
-### Methodology
-- Uses a sample of 182 cryptocurrencies over 2016-01-01 to 2018-12-31.
-- Builds a directed return network using rolling regressions on lagged standardized returns with adaptive Lasso.
-- Adds technology covariates such as hashing algorithm and proof type.
-- Uses dynamic covariate-assisted spectral clustering to estimate community memberships.
-- Tests usefulness through diversification analysis and a community-based momentum portfolio.
-
-### Results
-- Return-plus-technology community structure helped reveal segmentation and risk propagation.
-- Diversification improved when holding assets from different communities.
-- The paper reports a community-based inter-crypto momentum strategy earning 1.08% average daily return.
-- The paper reports no one-week reversal and says the effect was not explained by several behavioral controls.
-
-### How we can integrate or extend it
-- Use community labels as dynamic risk buckets in portfolio construction.
-- Add network/community features to alpha models and risk dashboards.
-- Extend covariates beyond proof type into on-chain activity, dev activity, bridge exposure, or tokenomics.
-- Combine community assignments with momentum or relative-value signals.
-
-### How to retest it
-- Rebuild the sample from the same period and rerun the rolling adaptive-Lasso network.
-- Compare return-only, tech-only, and combined-network variants.
-- Test sensitivity to window length, clustering assumptions, and transaction costs.
-- Re-run on post-2018 market structure to test persistence.
-
-### Explicit data/code/resources
-- Explicit data source: CryptoCompare API for daily prices, trading volumes, and contract attributes.
-- No explicit public code link was surfaced in the extracted source.
-
----
-
-## 5) To Trade Or Not To Trade: Cascading Waterfall Round Robin Rebalancing Mechanism for Cryptocurrencies
+## 7) To Trade Or Not To Trade: Cascading Waterfall Round Robin Rebalancing Mechanism for Cryptocurrencies
 Source: https://arxiv.org/pdf/2407.12150  
 Local copy: `papers/2407.12150.pdf`
 
@@ -217,7 +709,7 @@ Local copy: `papers/2407.12150.pdf`
 
 ---
 
-## 6) Beyond Trading Data: The Hidden Influence of Public Awareness and Interest on Cryptocurrency Volatility
+## 8) Beyond Trading Data: The Hidden Influence of Public Awareness and Interest on Cryptocurrency Volatility
 Source: https://arxiv.org/pdf/2202.08967  
 Local copy: `papers/2202.08967.pdf`
 
@@ -254,139 +746,6 @@ Local copy: `papers/2202.08967.pdf`
 ### Explicit data/code/resources
 - Explicit data types: historical trading data, tweet sentiment, search volumes, and blockchain data including hash rate and network difficulty.
 - The source says an open-source implementation exists on GitHub, but the extracted material did not expose the exact repository URL.
-
----
-
-## 7) Dynamic Latent-Factor Model with High-Dimensional Asset Characteristics
-Source: https://arxiv.org/pdf/2405.15721  
-Local copy: `papers/2405.15721.pdf`
-
-### Goals
-- Explain why different crypto assets earn different returns using a latent-factor framework.
-- Build a factor model that can handle a high-dimensional characteristic set.
-- Preserve valid asset-pricing inference while using regularization to remove weak characteristics.
-- Test whether crypto assets earn a positive inflation risk premium.
-
-### Methodology
-- Assumes crypto excess returns are driven by a small number of latent, time-varying common factors.
-- Assumes each asset's exposure to those factors is determined by its time-varying characteristics.
-- Introduces the `Double Selection Lasso Factor Model` (`DSLFM`) to estimate the latent factors and the characteristic-to-loading mapping under high dimensionality.
-- Uses a three-stage estimation flow: Double Selection Lasso, PCA on the resulting matrix, and soft-thresholding to enforce sparsity.
-- Compares out-of-sample performance against benchmark models including a hand-built three-factor model, PCA latent-factor models, and IPCA.
-- Extends the framework to test the risk premium of an observable nontradable factor, specifically inflation.
-
-### Results
-- The paper reports that DSLFM has economically meaningful out-of-sample portfolio performance, though IPCA achieved the stronger best Sharpe ratio in the test period.
-- Reported best out-of-sample Sharpe for DSLFM: `3.3`.
-- Reported best out-of-sample Sharpe for IPCA: `4.07`.
-- Bootstrapped characteristic-importance results identify `exchange inflows` and `exchange outflows` as the most statistically important characteristics.
-- The paper reports a positive inflation risk premium of `1.4` basis points with standard error `0.0097`, interpreted as roughly `7.3%` annual excess return.
-
-### Hidden Risk Factors
-- The latent factors in this paper are not named economic factors like value or momentum.
-- The paper treats them as unobserved statistical factors extracted from the return panel.
-- Their role is to capture the common cross-sectional return structure shared across crypto assets.
-- Characteristics help explain which assets load on those latent factors; the paper does not claim to directly identify each latent factor with a specific economic label.
-
-### How we can integrate or extend it
-- Use DSLFM as a research template for modeling crypto cross-sectional returns when characteristics are numerous and sparse.
-- Rebuild the characteristic pipeline with a focus on exchange-flow and other on-chain variables, since those were the strongest reported drivers.
-- Compare sparse latent-factor models against IPCA, PCA, and simpler observable-factor baselines on newer market windows.
-- Extend the framework with nonlinear mappings or modern debiased-ML variants if the goal is improved predictive modeling rather than only inference.
-
-### How to retest it
-- Recreate the weekly crypto panel and rerun the benchmark comparison on a fresh out-of-sample window.
-- Check whether exchange inflows and outflows remain dominant in more recent periods.
-- Re-test the inflation-risk result under alternative inflation proxies, factor counts, and rolling windows.
-- Stress test the results against approximate rather than exact sparsity assumptions and against different cross-validation choices.
-
-### Explicit data/code/resources
-- Explicit code link: `https://github.com/adambaybutt/crypto_asset_pricing`
-- Explicit data providers mentioned: `Coin Metrics`, `CoinMarketCap`, and `Glassnode`
-- Explicit author page: `http://www.adambaybutt.org/research.html`
-- Reproducibility note: the paper clearly states replication code is available, but full replication likely depends on access to the same underlying data sources, some of which appear to have been purchased or accessed via academic discounts.
-Source: https://arxiv.org/pdf/2405.15721  
-Local copy: `papers/2405.15721.pdf`
-
-### Goals
-- Develop estimation and inference for a dynamic latent-factor model when characteristics are high dimensional.
-- Use regularization to eliminate weak characteristics without breaking valid asset-pricing inference.
-- Apply the framework to crypto and test whether an observable nontradable inflation factor earns a premium.
-
-### Methodology
-- Models time-varying loadings as a linear function of high-dimensional characteristics.
-- Proposes the Double Selection Lasso Factor Model (`DSLFM`).
-- Runs double-selection Lasso in the first stage, then applies PCA to a stacked time-by-characteristic matrix.
-- Uses soft-thresholding to zero out weak characteristic rows.
-- Builds supporting econometric theory for estimation and inference.
-- Extends the framework to test a nontradable-factor risk premium.
-
-### Results
-- The paper reports comparable out-of-sample pricing and risk-adjusted returns versus benchmark methods in crypto.
-- Searchable source excerpts indicate exchange inflows and outflows were important characteristics in the empirical application.
-- One excerpt reports a maximum one-factor out-of-sample Sharpe of about 3.3, versus an IPCA benchmark maximum of 4.07.
-- The paper reports a positive and statistically significant inflation-mimicking portfolio premium, translated to roughly 7.3% annual excess return.
-
-### How we can integrate or extend it
-- Use DSLFM when the universe is feature rich but history is short, especially in crypto or DeFi panels.
-- Use it as a sparse screening layer before nonlinear modeling.
-- Extend the nontradable-factor test to sentiment, regulation, stablecoin flows, liquidity, or macro surprises.
-- Compare selected characteristics across subperiods as a regime-detection signal.
-
-### How to retest it
-- Re-run on later crypto windows and different rebalance frequencies.
-- Benchmark directly against PCA, IPCA, and simpler observable-factor models.
-- Stress test performance as p, N, and T vary and panels become more unbalanced.
-- Re-estimate the inflation-risk result with alternative inflation proxies.
-
-### Explicit data/code/resources
-- Explicit code link: https://github.com/adambaybutt/crypto_asset_pricing
-- Explicit author page: http://www.adambaybutt.org/research.html
-- The retrieved source clearly showed a crypto empirical application, but the extracted portion did not enumerate a full data-source list.
-
----
-
-## 8) Crypto Pricing with Hidden Factors
-Source: https://arxiv.org/pdf/2601.07664  
-Local copy: `papers/2601.07664.pdf`
-
-### Goals
-- Estimate crypto risk premia while allowing for omitted latent factors.
-- Test whether expected crypto returns load only on crypto-native risks or also on traditional equity risks.
-- Evaluate state variables tied to sentiment, speculative rotation, and security shocks.
-
-### Methodology
-- Uses the Giglio-Xiu three-pass latent-factor approach alongside observed stock and crypto factors.
-- Uses weekly data from 2023-01-01 to 2024-12-31 on non-stablecoins that were in the top 100 by market cap at any point.
-- Builds tradeable crypto factors: market, SMB, momentum, and a TVL factor orthogonalized to market.
-- Adds traditional factors including stock-market, profitability, and selected industry portfolios.
-- Studies nontradable state variables including Fear & Greed, Altcoin Season, and hacked value scaled by market capitalization.
-- Compares latent-factor estimates with conventional Fama-MacBeth estimates.
-
-### Results
-- Expected crypto returns load on both crypto-native and selected equity factors.
-- Crypto market risk is positively priced, while crypto SMB is strongly negatively priced.
-- Fear & Greed shocks show explanatory power for expected returns.
-- Altseason effects weaken under the latent-factor specification.
-- Hacked-value shocks are not priced in the sample studied.
-- TVL evidence is weak once latent factors are controlled for.
-
-### How we can integrate or extend it
-- Add latent-factor controls before trusting observable-factor premia in crypto cross-sectional work.
-- Blend crypto-native and selected equity factors in integrated models.
-- Treat sentiment/state variables as regime inputs rather than standalone alphas.
-- Use this as a template for cross-asset factor decomposition between crypto and equities.
-
-### How to retest it
-- Re-run the three-pass procedure on post-2024 data.
-- Check robustness to universe cutoffs, weighting schemes, and rolling windows.
-- Compare latent-factor results to Fama-MacBeth and pure observable-factor models on the same sample.
-- Re-test the state variables around later hacks and stronger alt-rotation regimes.
-
-### Explicit data/code/resources
-- Explicit data sources: CoinMarketCap API, DeFiLlama, thecvx.com, CoinMarketCap Altcoin Season data, CoinMarketCap Fear & Greed data, and the Kenneth French data library.
-- The arXiv source marks the paper as a preliminary draft and says not to cite without permission.
-- No explicit code repository was identified in the extracted source.
 
 ---
 
@@ -430,59 +789,6 @@ Local copy: `papers/2506.03287.pdf`
 - Explicit data/resources mentioned: CoinMarketCap API and DeFiLlama.
 - The source explicitly defines the exclusions used to construct `simple TVL`.
 - No explicit code repository was identified in the extracted source.
-
----
-
-## 12) Crypto Pricing with Hidden Factors
-Source: https://arxiv.org/pdf/2601.07664  
-Local copy: `papers/2601.07664.pdf`
-
-### Goals
-- Estimate which factors carry risk premia in the cross-section of cryptocurrency returns.
-- Test whether crypto is priced only by crypto-native factors or also by traditional equity-market factors.
-- Control for omitted common risks using latent factors rather than relying only on observed-factor Fama-MacBeth regressions.
-- Evaluate whether sentiment, altcoin rotation, or security shocks affect expected crypto returns.
-
-### Methodology
-- Uses weekly data from `2023-01-01` to `2024-12-31` on `253` non-stablecoin cryptocurrencies that were in the top `100` by market cap at some point in the sample.
-- Builds crypto-native factors in Fama-French style, including crypto market, crypto SMB, crypto momentum, and a TVL-based long-short factor.
-- Includes stock-market factors and selected equity-industry factors from Kenneth French data, plus non-tradeable state variables such as `Fear & Greed`, `Altcoin Season`, `Hacks / market cap`, and `CVX` implied volatility.
-- Estimates premia using the `Giglio-Xiu (2021)` three-pass latent-factor framework, which allows observed factors to coexist with omitted latent factors.
-- Uses `7` latent factors chosen by Bai-Ng information criteria and compares the latent-factor results with conventional Fama-MacBeth estimates.
-
-### Results
-- The latent-factor approach produces materially different premia than conventional Fama-MacBeth estimates, implying omitted common risks matter for crypto pricing.
-- The crypto market factor has a positive and significant premium; the latent-factor estimate is `0.471%` per week, about `24.5%` annualized, versus `0.164%` weekly or about `8.5%` annualized under Fama-MacBeth.
-- Crypto `SMB` carries a significantly negative premium, consistent with large-cap cryptos outperforming smaller names in the sample.
-- The latent-factor model finds significant positive premia for selected traditional-market components, especially `Software`, overall stock-market returns, and the stock profitability factor `RMW`.
-- `Fear & Greed` shocks show evidence of affecting expected returns, while `Hacks` are insignificant and `Altseason` loses significance after latent-factor controls.
-- Evidence that `TVL` carries an independent premium is weak and not robust once latent factors are included.
-
-### Hidden Risk Factors
-- The hidden factors in this paper are statistical latent factors extracted from the crypto return panel.
-- They are not directly labeled as named economic forces such as liquidity, sentiment, or regulation.
-- Their purpose is to absorb common omitted risks so the observed-factor premia are estimated more credibly.
-- The paper’s main point is that failing to control for these hidden common forces can materially distort factor-premium estimates.
-
-### How we can integrate or extend it
-- Use a latent-factor overlay when estimating crypto factor premia so observed-factor signals are not confounded by omitted common risks.
-- Revisit equity-linkage hypotheses with more recent data to test whether crypto’s integration with software, profitability, and broader equity factors is strengthening.
-- Treat sentiment and regime variables like `Fear & Greed` as state variables that may shift expected returns rather than as standalone tradable factors.
-- Use the paper as a template for combining crypto-native and traditional-market factors in one pricing framework.
-
-### How to retest it
-- Rebuild the 2023-2024 weekly panel and rerun both Fama-MacBeth and Giglio-Xiu three-pass estimates side by side.
-- Check whether the positive software/profitability premia persist in 2025+ data and across alternative crypto universes.
-- Test sensitivity to factor-construction choices, especially for TVL, crypto SMB, and momentum.
-- Evaluate whether the number of latent factors, the latent-factor selection rule, or different non-tradeable state-variable transformations change the main conclusions.
-
-### Explicit data/code/resources
-- Explicit crypto price source: `CoinMarketCap API`
-- Explicit hacked-value source: `DeFiLlama`
-- Explicit implied-volatility source: `thecvx.com`
-- Explicit stock-factor source: `Kenneth French data library`
-- Explicit sentiment/state-variable sources: `CoinMarketCap` Fear & Greed index and Altcoin Season Index
-- Reproducibility note: the extracted paper text did not expose an explicit public code repository, and the paper is marked as a `preliminary draft`.
 
 ---
 

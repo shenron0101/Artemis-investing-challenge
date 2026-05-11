@@ -14,7 +14,7 @@ coingecko:
   max_pages: 8
   request_sleep_seconds: 1.2
   ids_batch_size: 150
-  daily_lookback_days: 365
+  daily_lookback_days: 365    # free API hard-capped at 365 days
 
 binance:
   quote_priority:
@@ -23,22 +23,24 @@ binance:
     - BUSD
     - USDC
   interval: 1d
-  lookback_days: 365
+  lookback_days: 1825          # 5 years — pipeline paginates in 1000-bar chunks
   kline_limit: 1000
 
 artemis:
   request_sleep_seconds: 0.75
   symbols_batch_size: 40
-  date_lookback_days: 365
+  date_lookback_days: 1825    # 5 years
   metric_keywords:
     - transactions
     - real transactions
+    - real             # permissive match for real_transactions / real_volume
     - volume
     - real volume
     - cumulative buyers
     - cumulative sellers
     - gamed transactions
     - gamed volume
+    - gamed            # permissive match for gamed_*_pct metrics
     - avg transaction size
     - dau
     - active addresses
@@ -56,10 +58,25 @@ artemis:
   #   - CATEGORY
   #   - PROTOCOL
   #   - VERSION
+  # When true, run a one-shot diagnostic call against ETH that probes 4 candidate
+  # by-chain endpoint/param variants and logs each response shape. Disabled by
+  # default — flip to true to investigate, then flip back.
+  debug_dimensions: false
 
 defillama:
   enabled: true
   request_sleep_seconds: 0.4
+  pull_raises: false      # requires paid DeFiLlama plan (402)
+  pull_unlocks: false     # requires paid DeFiLlama plan (402)
+  pull_stablecoins: true
+  stablecoin_chains:
+    - ethereum
+    - solana
+    - arbitrum
+    - base
+    - bsc
+    - polygon
+    - avalanche
 
 storage:
   write_parquet: true

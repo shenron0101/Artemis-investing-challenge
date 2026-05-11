@@ -6,7 +6,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from clients import ArtemisClient, BinanceClient, CoinGeckoClient, DefiLlamaClient
+from clients import (
+    ArtemisClient,
+    BinanceClient,
+    CoinGeckoClient,
+    DefiLlamaClient,
+    DefiLlamaStablecoinsClient,
+)
 from logging_utils import get_logger
 from pipeline import DataCollectionPipeline, PipelineSettings
 
@@ -72,11 +78,18 @@ def main() -> None:
         logger.warning("ARTEMIS_API_KEY not set. Artemis pulls will be skipped.")
 
     defillama_client = None
+    defillama_stable_client = None
     if settings.cfg.get("defillama", {}).get("enabled", True):
+        sleep_s = float(settings.cfg.get("defillama", {}).get("request_sleep_seconds", 0.4))
         defillama_client = DefiLlamaClient(
             base_url=os.getenv("DEFILLAMA_BASE_URL", "https://api.llama.fi"),
-            sleep_seconds=float(settings.cfg.get("defillama", {}).get("request_sleep_seconds", 0.4)),
+            sleep_seconds=sleep_s,
         )
+        if settings.cfg.get("defillama", {}).get("pull_stablecoins", False):
+            defillama_stable_client = DefiLlamaStablecoinsClient(
+                base_url=os.getenv("DEFILLAMA_STABLECOINS_BASE_URL", "https://stablecoins.llama.fi"),
+                sleep_seconds=sleep_s,
+            )
 
     pipeline = DataCollectionPipeline(
         root=root,
@@ -86,6 +99,7 @@ def main() -> None:
         binance_client=binance_client,
         artemis_client=artemis_client,
         defillama_client=defillama_client,
+        defillama_stable_client=defillama_stable_client,
     )
 
     pipeline.run(args.coins_file.resolve())

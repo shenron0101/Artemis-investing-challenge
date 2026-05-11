@@ -10,7 +10,13 @@ from typing import Any
 import pandas as pd
 import yaml
 
-from clients import ArtemisClient, BinanceClient, CoinGeckoClient, DefiLlamaClient
+from clients import (
+    ArtemisClient,
+    BinanceClient,
+    CoinGeckoClient,
+    DefiLlamaClient,
+    DefiLlamaStablecoinsClient,
+)
 from io_utils import stable_hash, utc_now_iso, write_json, write_table
 from universe import load_universe_from_markdown
 
@@ -66,6 +72,7 @@ class DataCollectionPipeline:
         binance_client: BinanceClient,
         artemis_client: ArtemisClient | None,
         defillama_client: DefiLlamaClient | None = None,
+        defillama_stable_client: DefiLlamaStablecoinsClient | None = None,
     ) -> None:
         self.root = root
         self.settings = settings
@@ -74,6 +81,7 @@ class DataCollectionPipeline:
         self.binance = binance_client
         self.artemis = artemis_client
         self.defillama = defillama_client
+        self.defillama_stable = defillama_stable_client
 
         self.paths = PipelinePaths(
             root=root,
@@ -176,6 +184,7 @@ class DataCollectionPipeline:
             self.logger.exception("Binance stage failed run_id=%s error=%s", run_id, exc)
             coverage_summary["binance_stage_error"] = str(exc)
 
+        defillama_slugs: list[str] = []
         if self.defillama is not None:
             try:
                 llama_map_df, llama_tvl_df, llama_fees_df = self._pull_defillama(mapped_df, run_id)
@@ -204,9 +213,73 @@ class DataCollectionPipeline:
                         "defillama_fees_rows": int(len(llama_fees_df)),
                     }
                 )
+                if not llama_map_df.empty:
+                    defillama_slugs = (
+                        llama_map_df.loc[llama_map_df["mapping_status"] == "mapped", "defillama_slug"]
+                        .dropna()
+                        .unique()
+                        .tolist()
+                    )
             except Exception as exc:  # noqa: BLE001
                 self.logger.exception("DeFiLlama stage failed run_id=%s error=%s", run_id, exc)
                 coverage_summary["defillama_stage_error"] = str(exc)
+
+        defillama_cfg = self.settings.cfg.get("defillama", {}) or {}
+
+        if self.defillama is not None and defillama_cfg.get("pull_raises", False):
+            try:
+                raises_df = self._pull_defillama_raises(defillama_slugs, mapped_df, run_id)
+                write_table(
+                    raises_df,
+                    self.paths.clean_dir / "defillama_raises",
+                    write_csv=self.settings.cfg["storage"]["write_csv"],
+                    write_parquet=self.settings.cfg["storage"]["write_parquet"],
+                )
+                coverage_summary["defillama_raises_rows"] = int(len(raises_df))
+            except Exception as exc:  # noqa: BLE001
+                self.logger.exception("DeFiLlama raises stage failed run_id=%s error=%s", run_id, exc)
+                coverage_summary["defillama_raises_stage_error"] = str(exc)
+
+        if self.defillama is not None and defillama_cfg.get("pull_unlocks", False):
+            try:
+                unlocks_df = self._pull_defillama_unlocks(defillama_slugs, run_id)
+                write_table(
+                    unlocks_df,
+                    self.paths.clean_dir / "defillama_unlocks_schedule",
+                    write_csv=self.settings.cfg["storage"]["write_csv"],
+                    write_parquet=self.settings.cfg["storage"]["write_parquet"],
+                )
+                coverage_summary["defillama_unlocks_rows"] = int(len(unlocks_df))
+            except Exception as exc:  # noqa: BLE001
+                self.logger.exception("DeFiLlama unlocks stage failed run_id=%s error=%s", run_id, exc)
+                coverage_summary["defillama_unlocks_stage_error"] = str(exc)
+
+        if self.defillama_stable is not None and defillama_cfg.get("pull_stablecoins", False):
+            try:
+                stable_supply_df, stable_inflows_df = self._pull_stablecoins(run_id)
+                write_table(
+                    stable_supply_df,
+                    self.paths.clean_dir / "defillama_stablecoin_supply_daily",
+                    write_csv=self.settings.cfg["storage"]["write_csv"],
+                    write_parquet=self.settings.cfg["storage"]["write_parquet"],
+                )
+                write_table(
+                    stable_inflows_df,
+                    self.paths.clean_dir / "defillama_stablecoin_inflows_daily",
+                    write_csv=self.settings.cfg["storage"]["write_csv"],
+                    write_parquet=self.settings.cfg["storage"]["write_parquet"],
+                )
+                coverage_summary["defillama_stablecoin_supply_rows"] = int(len(stable_supply_df))
+                coverage_summary["defillama_stablecoin_inflow_rows"] = int(len(stable_inflows_df))
+            except Exception as exc:  # noqa: BLE001
+                self.logger.exception("DeFiLlama stablecoins stage failed run_id=%s error=%s", run_id, exc)
+                coverage_summary["defillama_stablecoin_stage_error"] = str(exc)
+
+        if self.artemis is not None and self.settings.cfg.get("artemis", {}).get("debug_dimensions", False):
+            try:
+                self._debug_artemis_dimensions(run_id)
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning("Artemis dimension diagnostic failed error=%s", exc)
 
         if self.artemis is not None:
             try:
@@ -379,39 +452,75 @@ class DataCollectionPipeline:
         lookback_days = int(self.settings.cfg["coingecko"].get("daily_lookback_days", 365))
         end_dt = datetime.now(timezone.utc)
         start_dt = end_dt - timedelta(days=lookback_days)
-        from_unix = int(start_dt.timestamp())
-        to_unix = int(end_dt.timestamp())
+
+        # Split into 365-day chunks so we never exceed per-request limits on any
+        # key tier. Each chunk is cached separately; on re-runs only the last
+        # (incomplete) chunk is re-fetched — older chunks already cover full years.
+        chunk_days = 365
+        chunk_boundaries: list[tuple[int, int, str]] = []
+        chunk_start = start_dt
+        while chunk_start < end_dt:
+            chunk_end = min(chunk_start + timedelta(days=chunk_days), end_dt)
+            label = chunk_start.strftime("%Y%m%d")
+            chunk_boundaries.append((int(chunk_start.timestamp()), int(chunk_end.timestamp()), label))
+            chunk_start = chunk_end
 
         rows: list[dict[str, Any]] = []
         for rec in ids_df.to_dict("records"):
             coin_id = rec["coingecko_id"]
-            daily_path = self.paths.raw_dir / "coingecko" / "daily_ticks" / f"{coin_id}.json"
-            try:
-                if daily_path.exists():
-                    with daily_path.open("r", encoding="utf-8") as f:
-                        payload = json.load(f)
-                else:
-                    payload = self.cg.get_market_chart_range(
-                        coin_id=coin_id,
-                        vs_currency="usd",
-                        from_unix=from_unix,
-                        to_unix=to_unix,
-                        interval="daily",
-                    )
-            except Exception as exc:  # noqa: BLE001
-                self.logger.warning("CoinGecko daily ticks failed coin_id=%s error=%s", coin_id, exc)
-                continue
-
-            if not daily_path.exists():
-                write_json(daily_path, payload)
-
             by_ts: dict[int, dict[str, Any]] = {}
-            for ts, val in payload.get("prices", []):
-                by_ts.setdefault(int(ts), {})["price_usd"] = val
-            for ts, val in payload.get("market_caps", []):
-                by_ts.setdefault(int(ts), {})["market_cap_usd"] = val
-            for ts, val in payload.get("total_volumes", []):
-                by_ts.setdefault(int(ts), {})["total_volume_usd"] = val
+
+            for from_unix, to_unix, label in chunk_boundaries:
+                # Last chunk: always re-fetch (partial; new days arrive daily).
+                # Earlier chunks: use cache — those years won't change.
+                is_last_chunk = (label == chunk_boundaries[-1][2])
+                chunk_path = (
+                    self.paths.raw_dir / "coingecko" / "daily_ticks"
+                    / f"{coin_id}_{label}.json"
+                )
+                # Also handle the old-style single-file cache from the 1-year run
+                legacy_path = self.paths.raw_dir / "coingecko" / "daily_ticks" / f"{coin_id}.json"
+
+                payload: dict[str, Any] | None = None
+                if not is_last_chunk and chunk_path.exists():
+                    try:
+                        with chunk_path.open("r", encoding="utf-8") as f:
+                            payload = json.load(f)
+                    except Exception:  # noqa: BLE001
+                        payload = None
+
+                if payload is None:
+                    try:
+                        payload = self.cg.get_market_chart_range(
+                            coin_id=coin_id,
+                            vs_currency="usd",
+                            from_unix=from_unix,
+                            to_unix=to_unix,
+                            interval="daily",
+                        )
+                        if not is_last_chunk:
+                            write_json(chunk_path, payload)
+                    except Exception as exc:  # noqa: BLE001
+                        self.logger.warning(
+                            "CoinGecko daily ticks failed coin_id=%s chunk=%s error=%s",
+                            coin_id, label, exc,
+                        )
+                        # Fall back to legacy single-file cache for any chunk that fails
+                        if legacy_path.exists() and label == chunk_boundaries[-1][2]:
+                            try:
+                                with legacy_path.open("r", encoding="utf-8") as f:
+                                    payload = json.load(f)
+                            except Exception:  # noqa: BLE001
+                                pass
+                        if payload is None:
+                            continue
+
+                for ts, val in (payload or {}).get("prices", []):
+                    by_ts.setdefault(int(ts), {})["price_usd"] = val
+                for ts, val in (payload or {}).get("market_caps", []):
+                    by_ts.setdefault(int(ts), {})["market_cap_usd"] = val
+                for ts, val in (payload or {}).get("total_volumes", []):
+                    by_ts.setdefault(int(ts), {})["total_volume_usd"] = val
 
             for ts, vals in by_ts.items():
                 dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
@@ -493,18 +602,32 @@ class DataCollectionPipeline:
             if not b_symbol:
                 continue
 
-            try:
-                klines = self.binance.get_klines(
-                    symbol=b_symbol,
-                    interval=interval,
-                    start_time_ms=start_ms,
-                    end_time_ms=end_ms,
-                    limit=limit,
-                )
-            except Exception as exc:  # noqa: BLE001
-                self.logger.warning("Binance klines failed symbol=%s error=%s", b_symbol, exc)
-                continue
+            # Paginate: Binance returns at most `limit` bars per call.
+            # For 5 years of daily bars we need ~2 pages (1825 / 1000).
+            all_klines: list[Any] = []
+            page_start = start_ms
+            while page_start < end_ms:
+                try:
+                    page = self.binance.get_klines(
+                        symbol=b_symbol,
+                        interval=interval,
+                        start_time_ms=page_start,
+                        end_time_ms=end_ms,
+                        limit=limit,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self.logger.warning("Binance klines failed symbol=%s error=%s", b_symbol, exc)
+                    break
+                if not page:
+                    break
+                all_klines.extend(page)
+                # Advance start to the close_time of the last bar + 1 ms
+                last_close_ms = int(page[-1][6])
+                if last_close_ms <= page_start:
+                    break  # guard against infinite loop
+                page_start = last_close_ms + 1
 
+            klines = all_klines
             write_json(self.paths.raw_dir / "binance" / "klines" / f"{b_symbol}.json", klines)
             for k in klines:
                 if len(k) < 9:
@@ -706,6 +829,353 @@ class DataCollectionPipeline:
         fees_df = pd.DataFrame(fees_rows)
         return map_df, tvl_df, fees_df
 
+    def _pull_defillama_raises(
+        self,
+        defillama_slugs: list[str],
+        mapped_df: pd.DataFrame,
+        run_id: str,
+    ) -> pd.DataFrame:
+        """Pull /raises (full DeFiLlama dump) once and filter to our universe."""
+        if self.defillama is None:
+            return pd.DataFrame()
+
+        try:
+            payload = self.defillama.get_raises()
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning("DeFiLlama raises pull failed error=%s", exc)
+            return pd.DataFrame()
+
+        write_json(self.paths.raw_dir / "defillama" / "raises.json", payload)
+
+        # Endpoint shape: {"raises": [...]} OR a bare list, depending on version.
+        if isinstance(payload, dict) and isinstance(payload.get("raises"), list):
+            raw_raises = payload["raises"]
+        elif isinstance(payload, list):
+            raw_raises = payload
+        else:
+            self.logger.warning("DeFiLlama raises payload unexpected shape type=%s", type(payload).__name__)
+            return pd.DataFrame()
+
+        slug_set = {s.lower() for s in defillama_slugs if isinstance(s, str)}
+        # Build name lookup so we can match raises by protocol display name too —
+        # /raises does not always carry a slug field.
+        name_to_slug: dict[str, str] = {}
+        if self.defillama is not None:
+            try:
+                proto_path = self.paths.raw_dir / "defillama" / "protocols.json"
+                if proto_path.exists():
+                    with proto_path.open("r", encoding="utf-8") as f:
+                        protos = json.load(f)
+                    for p in protos:
+                        slug = p.get("slug")
+                        name = p.get("name")
+                        if isinstance(slug, str) and isinstance(name, str) and slug.lower() in slug_set:
+                            name_to_slug[name.lower().strip()] = slug
+            except Exception:  # noqa: BLE001
+                pass
+
+        rows: list[dict[str, Any]] = []
+        for r in raw_raises:
+            if not isinstance(r, dict):
+                continue
+            slug = r.get("slug") or r.get("defillamaId")
+            name = r.get("name") or r.get("protocol")
+            matched_slug: str | None = None
+            if isinstance(slug, str) and slug.lower() in slug_set:
+                matched_slug = slug
+            elif isinstance(name, str) and name.lower().strip() in name_to_slug:
+                matched_slug = name_to_slug[name.lower().strip()]
+            if matched_slug is None:
+                continue
+
+            ts = r.get("date")
+            date_iso: str | None = None
+            if isinstance(ts, (int, float)):
+                date_iso = datetime.fromtimestamp(int(ts), tz=timezone.utc).date().isoformat()
+            elif isinstance(ts, str):
+                date_iso = ts[:10]
+
+            leads = r.get("leadInvestors")
+            if isinstance(leads, list):
+                leads_str = ", ".join(str(x) for x in leads if x)
+            else:
+                leads_str = leads if isinstance(leads, str) else None
+
+            rows.append(
+                {
+                    "defillama_slug": matched_slug,
+                    "name": name,
+                    "date": date_iso,
+                    "amount_raised_usd": r.get("amount") or r.get("amountRaised"),
+                    "round_type": r.get("round"),
+                    "valuation_usd": r.get("valuation"),
+                    "category": r.get("category"),
+                    "lead_investors": leads_str,
+                    "source_url": r.get("source"),
+                    "run_id": run_id,
+                }
+            )
+
+        df = pd.DataFrame(rows)
+        if df.empty:
+            return df
+        return df.sort_values(["defillama_slug", "date"], na_position="last").reset_index(drop=True)
+
+    def _pull_defillama_unlocks(
+        self,
+        defillama_slugs: list[str],
+        run_id: str,
+    ) -> pd.DataFrame:
+        """Per-slug emission/unlock schedule. Many protocols return 404 — that's expected."""
+        if self.defillama is None or not defillama_slugs:
+            return pd.DataFrame()
+
+        rows: list[dict[str, Any]] = []
+        for slug in defillama_slugs:
+            try:
+                payload = self.defillama.get_unlocks(slug)
+            except Exception as exc:  # noqa: BLE001
+                # 404 is the dominant failure mode here — protocol simply doesn't have unlock data
+                self.logger.info("DeFiLlama unlocks unavailable slug=%s error=%s", slug, str(exc)[:200])
+                continue
+
+            write_json(self.paths.raw_dir / "defillama" / "unlocks" / f"{slug}.json", payload)
+
+            if not isinstance(payload, dict):
+                continue
+
+            # The /emission/{slug} payload typically carries:
+            #   metadata: token, gecko_id, sources, max_supply
+            #   documented or sources: an array of unlock events
+            #   chartData: cumulative unlock series
+            doc_source = (
+                payload.get("documented")
+                or payload.get("sources")
+                or payload.get("events")
+            )
+            events: list[Any] = []
+            if isinstance(doc_source, list):
+                events = doc_source
+            elif isinstance(doc_source, dict) and isinstance(doc_source.get("events"), list):
+                events = doc_source.get("events")
+
+            token_symbol = payload.get("token") or payload.get("tokenSymbol")
+            max_supply = payload.get("maxSupply") or payload.get("max_supply")
+
+            for ev in events:
+                if not isinstance(ev, dict):
+                    continue
+                ts = ev.get("timestamp") or ev.get("date") or ev.get("time")
+                date_iso: str | None = None
+                if isinstance(ts, (int, float)):
+                    date_iso = datetime.fromtimestamp(int(ts), tz=timezone.utc).date().isoformat()
+                elif isinstance(ts, str):
+                    date_iso = ts[:10]
+
+                amount = ev.get("amount") or ev.get("noOfTokens") or ev.get("tokens")
+                category = ev.get("category") or ev.get("description") or ev.get("label")
+
+                pct_supply: float | None = None
+                if isinstance(amount, (int, float)) and isinstance(max_supply, (int, float)) and max_supply:
+                    try:
+                        pct_supply = float(amount) / float(max_supply)
+                    except Exception:  # noqa: BLE001
+                        pct_supply = None
+
+                rows.append(
+                    {
+                        "defillama_slug": slug,
+                        "token": token_symbol,
+                        "date": date_iso,
+                        "unlock_amount_tokens": amount,
+                        "category": category,
+                        "pct_of_max_supply": pct_supply,
+                        "run_id": run_id,
+                    }
+                )
+
+        df = pd.DataFrame(rows)
+        if df.empty:
+            return df
+        return df.sort_values(["defillama_slug", "date"], na_position="last").reset_index(drop=True)
+
+    def _pull_stablecoins(self, run_id: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Global + per-chain stablecoin supply series, plus derived daily inflows."""
+        if self.defillama_stable is None:
+            return pd.DataFrame(), pd.DataFrame()
+
+        chains = list(self.settings.cfg.get("defillama", {}).get("stablecoin_chains") or [])
+
+        supply_rows: list[dict[str, Any]] = []
+
+        # Global aggregate first
+        try:
+            all_payload = self.defillama_stable.get_stablecoin_charts_all()
+            write_json(self.paths.raw_dir / "defillama" / "stablecoins" / "all.json", all_payload)
+            for point in all_payload if isinstance(all_payload, list) else []:
+                if not isinstance(point, dict):
+                    continue
+                supply_rows.append(self._parse_stable_point(point, chain="ALL", run_id=run_id))
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning("DeFiLlama stablecoin all-chains pull failed error=%s", exc)
+
+        # Per-chain
+        for chain in chains:
+            try:
+                chain_payload = self.defillama_stable.get_stablecoin_charts_chain(chain)
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning("DeFiLlama stablecoin chain pull failed chain=%s error=%s", chain, exc)
+                continue
+            write_json(
+                self.paths.raw_dir / "defillama" / "stablecoins" / f"{chain}.json",
+                chain_payload,
+            )
+            for point in chain_payload if isinstance(chain_payload, list) else []:
+                if not isinstance(point, dict):
+                    continue
+                supply_rows.append(self._parse_stable_point(point, chain=chain, run_id=run_id))
+
+        supply_df = pd.DataFrame([r for r in supply_rows if r])
+        if supply_df.empty:
+            return supply_df, pd.DataFrame()
+
+        supply_df = (
+            supply_df.dropna(subset=["date"])
+            .sort_values(["chain", "date"])
+            .drop_duplicates(subset=["chain", "date"], keep="last")
+            .reset_index(drop=True)
+        )
+
+        # Derived: daily inflow = supply_t − supply_{t-1} per chain
+        supply_df["supply_usd_prev"] = supply_df.groupby("chain")["supply_usd"].shift(1)
+        supply_df["inflow_usd"] = supply_df["supply_usd"] - supply_df["supply_usd_prev"]
+
+        inflows_df = supply_df[["date", "chain", "supply_usd", "inflow_usd", "run_id"]].copy()
+
+        # Drop helper col before returning supply
+        supply_out = supply_df.drop(columns=["supply_usd_prev", "inflow_usd"]).reset_index(drop=True)
+        return supply_out, inflows_df.reset_index(drop=True)
+
+    @staticmethod
+    def _parse_stable_point(point: dict[str, Any], *, chain: str, run_id: str) -> dict[str, Any] | None:
+        """Normalise one entry from /stablecoincharts/{*} → flat row."""
+        ts = point.get("date")
+        date_iso: str | None = None
+        if isinstance(ts, (int, float)):
+            date_iso = datetime.fromtimestamp(int(ts), tz=timezone.utc).date().isoformat()
+        elif isinstance(ts, str):
+            try:
+                # DeFiLlama returns date as a string Unix timestamp, e.g. "1511913600"
+                date_iso = datetime.fromtimestamp(int(ts), tz=timezone.utc).date().isoformat()
+            except (ValueError, OverflowError, OSError):
+                date_iso = ts[:10]
+
+        peg_obj = point.get("totalCirculatingUSD") or point.get("totalCirculating")
+        # totalCirculatingUSD may be a dict keyed by peg type ({"peggedUSD": <num>, ...}).
+        # Sum all peg types so we get a single supply number per (chain, date).
+        supply_usd: float | None = None
+        if isinstance(peg_obj, dict):
+            try:
+                supply_usd = float(sum(v for v in peg_obj.values() if isinstance(v, (int, float))))
+            except Exception:  # noqa: BLE001
+                supply_usd = None
+        elif isinstance(peg_obj, (int, float)):
+            supply_usd = float(peg_obj)
+
+        if date_iso is None or supply_usd is None:
+            return None
+
+        return {
+            "date": date_iso,
+            "chain": chain,
+            "supply_usd": supply_usd,
+            "run_id": run_id,
+        }
+
+    def _debug_artemis_dimensions(self, run_id: str) -> None:
+        """One-shot diagnostic — log the response shape of 4 candidate by-chain
+        endpoint variants. Only runs when artemis.debug_dimensions is true.
+        Does not write any clean tables; raw payloads land in raw/artemis/_debug/."""
+        if self.artemis is None:
+            return
+
+        probe_metric = "fees"
+        probe_symbol = "ETH"
+        end_date = datetime.now(timezone.utc).date().isoformat()
+        start_date = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+        debug_dir = self.paths.raw_dir / "artemis" / "_debug"
+
+        attempts: list[tuple[str, dict[str, Any], str]] = [
+            (
+                "dimensionType_CHAIN",
+                {
+                    "metric_names": [probe_metric],
+                    "symbols": [probe_symbol],
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "dimension_type": "CHAIN",
+                },
+                f"/data/{probe_metric}/?dimensionType=CHAIN",
+            ),
+            (
+                "dimensionType_chain_lower",
+                {
+                    "metric_names": [probe_metric],
+                    "symbols": [probe_symbol],
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "dimension_type": "chain",
+                },
+                f"/data/{probe_metric}/?dimensionType=chain",
+            ),
+        ]
+
+        # Simulate two extra param-name variants by calling the underlying _request directly
+        for label, params_extra, _doc in [
+            (
+                "groupBy_CHAIN",
+                {"metric_names": [probe_metric], "symbols": [probe_symbol],
+                 "start_date": start_date, "end_date": end_date},
+                "groupBy=CHAIN",
+            ),
+        ]:
+            try:
+                path = f"/data/{probe_metric}/"
+                resp = self.artemis._request(  # noqa: SLF001  — diagnostic only
+                    "GET",
+                    path,
+                    params=self.artemis._with_key(  # noqa: SLF001
+                        {
+                            "symbols": probe_symbol,
+                            "startDate": start_date,
+                            "endDate": end_date,
+                            "groupBy": "CHAIN",
+                        }
+                    ),
+                )
+                write_json(debug_dir / f"{label}_{run_id}.json", resp)
+                self.logger.info(
+                    "artemis_dim_probe label=%s bytes=%d top_keys=%s",
+                    label,
+                    len(json.dumps(resp, default=str)),
+                    list(resp.keys()) if isinstance(resp, dict) else "[list]",
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning("artemis_dim_probe label=%s error=%s", label, exc)
+
+        for label, kwargs, _doc in attempts:
+            try:
+                resp = self.artemis.get_data(**kwargs)
+                write_json(debug_dir / f"{label}_{run_id}.json", resp)
+                self.logger.info(
+                    "artemis_dim_probe label=%s bytes=%d top_keys=%s",
+                    label,
+                    len(json.dumps(resp, default=str)),
+                    list(resp.keys()) if isinstance(resp, dict) else "[list]",
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning("artemis_dim_probe label=%s error=%s", label, exc)
+
     def _pull_artemis(self, mapped_df: pd.DataFrame, run_id: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         if self.artemis is None:
             return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
@@ -763,6 +1233,12 @@ class DataCollectionPipeline:
         used_metric_names = [m for m in candidate_metric_names if any(k in m.replace("_", " ") for k in selected_metrics)]
         if not used_metric_names:
             used_metric_names = candidate_metric_names[:4]
+
+        self.logger.info(
+            "Artemis metric selection: keywords_matched=%s requesting=%s",
+            sorted(selected_metrics),
+            used_metric_names,
+        )
 
         batch_size = int(self.settings.cfg["artemis"]["symbols_batch_size"])
         rows_long: list[dict[str, Any]] = []
