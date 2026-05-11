@@ -72,7 +72,7 @@ mom = (prices_core / prices_core.shift(window)) - 1.0
 month_ends = mom.resample("ME").last().dropna(how="all")
 rank_m = month_ends.rank(axis=1, ascending=False)  # 1 = best momentum
 heat_m = rank_m.T  # rows = symbol, cols = month
-heat_m = heat_m.loc[heat_m.iloc[:, -1].sort_values().index]
+heat_m = heat_m.sort_index()
 heat_m.columns = [c.strftime("%Y-%m") for c in heat_m.columns]
 
 fig = px.imshow(
@@ -89,7 +89,7 @@ vol = ret_core.rolling(90).std() * np.sqrt(365)
 vol_me = vol.resample("ME").last().dropna(how="all")
 rank_v = vol_me.rank(axis=1, ascending=True)  # 1 = lowest vol = best for V
 heat_v = rank_v.T
-heat_v = heat_v.loc[heat_v.iloc[:, -1].sort_values().index]
+heat_v = heat_v.sort_index()
 heat_v.columns = [c.strftime("%Y-%m") for c in heat_v.columns]
 
 fig = px.imshow(
@@ -117,7 +117,7 @@ avg_corr = rolling_avg_corr(ret_core.dropna(axis=1, thresh=200), window=90)
 avg_corr_me = avg_corr.resample("ME").last().dropna(how="all")
 rank_c = avg_corr_me.rank(axis=1, ascending=True)  # low avg corr = good diversifier
 heat_c = rank_c.T
-heat_c = heat_c.loc[heat_c.iloc[:, -1].sort_values().index]
+heat_c = heat_c.sort_index()
 heat_c.columns = [c.strftime("%Y-%m") for c in heat_c.columns]
 
 fig = px.imshow(
@@ -150,7 +150,7 @@ def atr(df: pd.DataFrame, period: int = 42) -> pd.DataFrame:
     ).max(axis=1)
     df["atr"] = tr.rolling(period).mean()
     df["upper"] = df["high"].rolling(period).max() + df["atr"]
-    df["lower"] = df["low"].rolling(period).max() + df["atr"]
+    df["lower"] = df["low"].rolling(period).min() - df["atr"]
     df["state"] = 0
     long_mask = df["high"] > df["upper"].shift(1)
     short_mask = df["low"] < df["lower"].shift(1)

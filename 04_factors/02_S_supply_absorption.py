@@ -11,9 +11,12 @@ market grows face structural headwinds.
 Signal:
     implied_supply_t = market_cap_usd_t / price_usd_t
     emission_90d     = implied_supply_t / implied_supply_{t-90} - 1
-    overhang_fdv     = (fdv - market_cap) / fdv
-    S_score = -0.6 * z(emission_90d) - 0.4 * z(overhang_fdv)
+    S_score = -z(emission_90d)
     S_rank  = highest S_score → rank 1 (least dilutive)
+
+    Note: FDV-overhang is only available as a latest snapshot (no history), so
+    it is excluded from the IC time-series. It is still visualised in Panel 3
+    (03_emission_vs_overhang) as a cross-sectional descriptive.
 
 Outputs:
     01_implied_supply_sanity.png    — line chart for known emitters
@@ -161,16 +164,10 @@ save(fig, "03_emission_vs_overhang", STEM, width=1300, height=900)
 emission_90_panel = (implied / implied.shift(lookback)) - 1.0
 emission_z = (emission_90_panel.sub(emission_90_panel.mean(axis=1), axis=0)
               .div(emission_90_panel.std(axis=1), axis=0))
-overhang_z = (overhang - overhang.mean()) / overhang.std()
-# Broadcast overhang z across all dates (constant per asset). Assets without an
-# FDV cap (BTC, ETH, USDT) get a neutral z=0 so the IC test isn't starved of
-# observations — they contribute via emission only.
-overhang_z_filled = overhang_z.fillna(0.0)
-overhang_z_panel = pd.DataFrame(
-    np.tile(overhang_z_filled.values, (len(emission_z), 1)),
-    index=emission_z.index, columns=emission_z.columns
-)
-S_score = (-0.6 * emission_z).add(-0.4 * overhang_z_panel, fill_value=0.0)
+# Overhang excluded from IC test: only a latest snapshot is available, so
+# tiling it across history would introduce look-ahead. See Panel 3 for the
+# descriptive cross-section.
+S_score = -emission_z
 
 # Rank descending — highest score = rank 1 = least dilutive
 S_rank = cross_sectional_rank(S_score, ascending=False)

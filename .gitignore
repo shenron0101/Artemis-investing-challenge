@@ -70,3 +70,18 @@ reports/*.html
 # Images and HTML (generated/output files)
 *.png
 *.html
+
+# Research PDFs are large local source documents; keep notes/scripts in git.
+02_Research/*.pdf
+
+# Paper-reproduction generated outputs. Source scripts and REPORT.md stay tracked.
+04_factors/figures/
+05_btc_direction/artifacts/
+05_btc_direction/figures/
+06_artemis_econometrics/artifacts/
+06_artemis_econometrics/figures/
+07_hidden_factor_pricing/artifacts/
+07_hidden_factor_pricing/figures/
+!05_btc_direction/artifacts/**/.gitkeep
+!06_artemis_econometrics/artifacts/**/.gitkeep
+!07_hidden_factor_pricing/artifacts/**/.gitkeep

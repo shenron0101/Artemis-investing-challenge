@@ -103,7 +103,7 @@ def atr_state(df: pd.DataFrame, period: int = 42) -> pd.Series:
     ], axis=1).max(axis=1)
     d["atr"] = tr.rolling(period).mean()
     d["upper"] = d["high"].rolling(period).max() + d["atr"]
-    d["lower"] = d["low"].rolling(period).max() + d["atr"]
+    d["lower"] = d["low"].rolling(period).min() - d["atr"]
     state = pd.Series(np.nan, index=d.index)
     state[d["high"] > d["upper"].shift(1)] = 1.0
     state[d["low"] < d["lower"].shift(1)] = -1.0
@@ -150,18 +150,7 @@ emission_90_panel = (implied / implied.shift(90)) - 1.0
 emission_z = emission_90_panel.sub(emission_90_panel.mean(axis=1), axis=0).div(
     emission_90_panel.std(axis=1), axis=0
 )
-overhang = pd.Series({
-    s: (sym_to_fdv[s] - sym_to_mcap[s]) / sym_to_fdv[s]
-    if pd.notna(sym_to_fdv.get(s)) and pd.notna(sym_to_mcap.get(s)) and sym_to_fdv[s] > 0
-    else np.nan
-    for s in implied.columns
-}).clip(lower=0)
-overhang_z = ((overhang - overhang.mean()) / overhang.std()).fillna(0.0)
-overhang_z_panel = pd.DataFrame(
-    np.tile(overhang_z.values, (len(emission_z), 1)),
-    index=emission_z.index, columns=emission_z.columns
-)
-S_score = (-0.6 * emission_z).add(-0.4 * overhang_z_panel, fill_value=0.0)
+S_score = -emission_z
 S_rank = cross_sectional_rank(S_score, ascending=False)
 
 # G — activity-validated growth
@@ -297,16 +286,13 @@ save(fig, "03_per_factor_cumulative_ic", STEM, width=1300, height=720)
 # %% Panel 4 — v1 vs v2 composite IC over time
 def composite_panel(rank_panels: dict[str, pd.DataFrame]) -> pd.DataFrame:
     """Daily composite rank: average of available factor ranks per (date, symbol)."""
-    aligned = []
     cols = sorted(set().union(*[set(p.columns) for p in rank_panels.values()]))
     idx = sorted(set().union(*[set(p.index) for p in rank_panels.values()]))
-    for name, p in rank_panels.items():
-        aligned.append(p.reindex(index=idx, columns=cols).values)
+    aligned = [p.reindex(index=idx, columns=cols).values for p in rank_panels.values()]
     arr = np.dstack(aligned)
     with np.errstate(invalid="ignore"):
         mean = np.nanmean(arr, axis=2)
-    out = pd.DataFrame(mean, index=idx, columns=cols)
-    return out
+    return pd.DataFrame(mean, index=idx, columns=cols)
 
 
 comp_v1_panel = composite_panel({"M": M_rank, "V": V_rank, "C": C_rank, "T": T_rank})
