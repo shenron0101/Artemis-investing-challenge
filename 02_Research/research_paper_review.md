@@ -262,6 +262,53 @@ Source: https://arxiv.org/pdf/2405.15721
 Local copy: `papers/2405.15721.pdf`
 
 ### Goals
+- Explain why different crypto assets earn different returns using a latent-factor framework.
+- Build a factor model that can handle a high-dimensional characteristic set.
+- Preserve valid asset-pricing inference while using regularization to remove weak characteristics.
+- Test whether crypto assets earn a positive inflation risk premium.
+
+### Methodology
+- Assumes crypto excess returns are driven by a small number of latent, time-varying common factors.
+- Assumes each asset's exposure to those factors is determined by its time-varying characteristics.
+- Introduces the `Double Selection Lasso Factor Model` (`DSLFM`) to estimate the latent factors and the characteristic-to-loading mapping under high dimensionality.
+- Uses a three-stage estimation flow: Double Selection Lasso, PCA on the resulting matrix, and soft-thresholding to enforce sparsity.
+- Compares out-of-sample performance against benchmark models including a hand-built three-factor model, PCA latent-factor models, and IPCA.
+- Extends the framework to test the risk premium of an observable nontradable factor, specifically inflation.
+
+### Results
+- The paper reports that DSLFM has economically meaningful out-of-sample portfolio performance, though IPCA achieved the stronger best Sharpe ratio in the test period.
+- Reported best out-of-sample Sharpe for DSLFM: `3.3`.
+- Reported best out-of-sample Sharpe for IPCA: `4.07`.
+- Bootstrapped characteristic-importance results identify `exchange inflows` and `exchange outflows` as the most statistically important characteristics.
+- The paper reports a positive inflation risk premium of `1.4` basis points with standard error `0.0097`, interpreted as roughly `7.3%` annual excess return.
+
+### Hidden Risk Factors
+- The latent factors in this paper are not named economic factors like value or momentum.
+- The paper treats them as unobserved statistical factors extracted from the return panel.
+- Their role is to capture the common cross-sectional return structure shared across crypto assets.
+- Characteristics help explain which assets load on those latent factors; the paper does not claim to directly identify each latent factor with a specific economic label.
+
+### How we can integrate or extend it
+- Use DSLFM as a research template for modeling crypto cross-sectional returns when characteristics are numerous and sparse.
+- Rebuild the characteristic pipeline with a focus on exchange-flow and other on-chain variables, since those were the strongest reported drivers.
+- Compare sparse latent-factor models against IPCA, PCA, and simpler observable-factor baselines on newer market windows.
+- Extend the framework with nonlinear mappings or modern debiased-ML variants if the goal is improved predictive modeling rather than only inference.
+
+### How to retest it
+- Recreate the weekly crypto panel and rerun the benchmark comparison on a fresh out-of-sample window.
+- Check whether exchange inflows and outflows remain dominant in more recent periods.
+- Re-test the inflation-risk result under alternative inflation proxies, factor counts, and rolling windows.
+- Stress test the results against approximate rather than exact sparsity assumptions and against different cross-validation choices.
+
+### Explicit data/code/resources
+- Explicit code link: `https://github.com/adambaybutt/crypto_asset_pricing`
+- Explicit data providers mentioned: `Coin Metrics`, `CoinMarketCap`, and `Glassnode`
+- Explicit author page: `http://www.adambaybutt.org/research.html`
+- Reproducibility note: the paper clearly states replication code is available, but full replication likely depends on access to the same underlying data sources, some of which appear to have been purchased or accessed via academic discounts.
+Source: https://arxiv.org/pdf/2405.15721  
+Local copy: `papers/2405.15721.pdf`
+
+### Goals
 - Develop estimation and inference for a dynamic latent-factor model when characteristics are high dimensional.
 - Use regularization to eliminate weak characteristics without breaking valid asset-pricing inference.
 - Apply the framework to crypto and test whether an observable nontradable inflation factor earns a premium.
@@ -383,6 +430,59 @@ Local copy: `papers/2506.03287.pdf`
 - Explicit data/resources mentioned: CoinMarketCap API and DeFiLlama.
 - The source explicitly defines the exclusions used to construct `simple TVL`.
 - No explicit code repository was identified in the extracted source.
+
+---
+
+## 12) Crypto Pricing with Hidden Factors
+Source: https://arxiv.org/pdf/2601.07664  
+Local copy: `papers/2601.07664.pdf`
+
+### Goals
+- Estimate which factors carry risk premia in the cross-section of cryptocurrency returns.
+- Test whether crypto is priced only by crypto-native factors or also by traditional equity-market factors.
+- Control for omitted common risks using latent factors rather than relying only on observed-factor Fama-MacBeth regressions.
+- Evaluate whether sentiment, altcoin rotation, or security shocks affect expected crypto returns.
+
+### Methodology
+- Uses weekly data from `2023-01-01` to `2024-12-31` on `253` non-stablecoin cryptocurrencies that were in the top `100` by market cap at some point in the sample.
+- Builds crypto-native factors in Fama-French style, including crypto market, crypto SMB, crypto momentum, and a TVL-based long-short factor.
+- Includes stock-market factors and selected equity-industry factors from Kenneth French data, plus non-tradeable state variables such as `Fear & Greed`, `Altcoin Season`, `Hacks / market cap`, and `CVX` implied volatility.
+- Estimates premia using the `Giglio-Xiu (2021)` three-pass latent-factor framework, which allows observed factors to coexist with omitted latent factors.
+- Uses `7` latent factors chosen by Bai-Ng information criteria and compares the latent-factor results with conventional Fama-MacBeth estimates.
+
+### Results
+- The latent-factor approach produces materially different premia than conventional Fama-MacBeth estimates, implying omitted common risks matter for crypto pricing.
+- The crypto market factor has a positive and significant premium; the latent-factor estimate is `0.471%` per week, about `24.5%` annualized, versus `0.164%` weekly or about `8.5%` annualized under Fama-MacBeth.
+- Crypto `SMB` carries a significantly negative premium, consistent with large-cap cryptos outperforming smaller names in the sample.
+- The latent-factor model finds significant positive premia for selected traditional-market components, especially `Software`, overall stock-market returns, and the stock profitability factor `RMW`.
+- `Fear & Greed` shocks show evidence of affecting expected returns, while `Hacks` are insignificant and `Altseason` loses significance after latent-factor controls.
+- Evidence that `TVL` carries an independent premium is weak and not robust once latent factors are included.
+
+### Hidden Risk Factors
+- The hidden factors in this paper are statistical latent factors extracted from the crypto return panel.
+- They are not directly labeled as named economic forces such as liquidity, sentiment, or regulation.
+- Their purpose is to absorb common omitted risks so the observed-factor premia are estimated more credibly.
+- The paper’s main point is that failing to control for these hidden common forces can materially distort factor-premium estimates.
+
+### How we can integrate or extend it
+- Use a latent-factor overlay when estimating crypto factor premia so observed-factor signals are not confounded by omitted common risks.
+- Revisit equity-linkage hypotheses with more recent data to test whether crypto’s integration with software, profitability, and broader equity factors is strengthening.
+- Treat sentiment and regime variables like `Fear & Greed` as state variables that may shift expected returns rather than as standalone tradable factors.
+- Use the paper as a template for combining crypto-native and traditional-market factors in one pricing framework.
+
+### How to retest it
+- Rebuild the 2023-2024 weekly panel and rerun both Fama-MacBeth and Giglio-Xiu three-pass estimates side by side.
+- Check whether the positive software/profitability premia persist in 2025+ data and across alternative crypto universes.
+- Test sensitivity to factor-construction choices, especially for TVL, crypto SMB, and momentum.
+- Evaluate whether the number of latent factors, the latent-factor selection rule, or different non-tradeable state-variable transformations change the main conclusions.
+
+### Explicit data/code/resources
+- Explicit crypto price source: `CoinMarketCap API`
+- Explicit hacked-value source: `DeFiLlama`
+- Explicit implied-volatility source: `thecvx.com`
+- Explicit stock-factor source: `Kenneth French data library`
+- Explicit sentiment/state-variable sources: `CoinMarketCap` Fear & Greed index and Altcoin Season Index
+- Reproducibility note: the extracted paper text did not expose an explicit public code repository, and the paper is marked as a `preliminary draft`.
 
 ---
 
