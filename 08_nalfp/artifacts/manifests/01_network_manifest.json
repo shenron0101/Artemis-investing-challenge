@@ -1,0 +1,9 @@
+{
+  "window_weeks": 12,
+  "min_overlap": 8,
+  "louvain_resolution": 1.0,
+  "weeks_clustered": 41,
+  "min_clusters": 7,
+  "max_clusters": 11,
+  "mean_entropy": 2.175216985715105
+}
