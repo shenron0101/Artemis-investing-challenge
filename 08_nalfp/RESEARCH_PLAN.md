@@ -133,18 +133,23 @@ GX directly addresses *omitted factor bias* in observed-only Fama-MacBeth, which
 
 ---
 
-## Step 3 — Regime Detector (`03_regime_detector.py`)
+## Step 3 — IC-Weighted Factor Signal Combination (`03_signal_combination.py`)
 
-**Purpose**: Determine each week whether the market is in a *network-fragmented* regime (cluster structure dominates) or a *macro-driven* regime (common latent factors dominate), then blend the two signal streams accordingly.
+**Purpose**: Combine the six tradeable factor characteristics (SMBC, MomC, VolC, FunC, NetMom, NetRel) into a single per-asset expected-return signal using rolling out-of-sample IC weights. This replaces the earlier two-stream GX-vs-network adaptive blend from v2.
 
 **Procedure**:
-1. Compute rolling 8-week IC for two signal streams:
-   - `IC_net_t` = rolling mean IC of `within_cluster_mom` against h=1w forward returns
-   - `IC_ipca_t` = rolling mean IC of IPCA expected-return against h=1w forward returns
-2. Adaptive weight: `w_net_t = IC_net_t / (IC_net_t + IC_ipca_t)` — IC-proportional blend (same validated approach as RAAM v2 IC-weighting)
-3. Final expected return: `E_final_it = w_net_t × E_net_it + (1 − w_net_t) × E_ipca_it`
+1. Load per-week Spearman IC for each factor from `factor_ic_timeseries.parquet` (written by `02_factor_pricing.py`).
+2. Rolling 8-week mean IC, lagged 1 week — strictly OOS. Each factor's IC is direction-signed so positive IC means the characteristic predicts returns in the intended direction.
+3. Positive-clipped IC-proportional weights:
+   - `w_{k,t} = clip+(IC_roll_{k,t}) / sum_j clip+(IC_roll_{j,t})`
+   - If all factors have non-positive IC, fall back to equal weight (1/6 each).
+4. Per-asset expected return:
+   - `E_final_{i,t} = sum_k w_{k,t} * sign_k * z_cs(c_{k,i,t})`
+   - `z_cs` is the cross-sectional z-score within week t; `sign_k` is the factor direction (+1 / −1).
 
-The weights are determined by *out-of-sample predictive accuracy* (rolling IC), not by subjective tuning — scientifically clean.
+**Why IC-weighting over training-window λ̂**: The GX Fama-MacBeth λ̂ from v2 overfits on 24 training weeks — the OOS Sharpe was −1.44. Rolling IC uses only 8 past weeks but works on *standardised characteristics*, avoiding the magnitude overfit. A factor whose 8-week rolling IC turns negative gets zero weight automatically (regime adaptation without a separate regime detector).
+
+**RC excluded** (it's a level factor, not sortable). **TVLC and SupC excluded** for sparse coverage (< 30 weeks in the 52-week sample).
 
 ---
 

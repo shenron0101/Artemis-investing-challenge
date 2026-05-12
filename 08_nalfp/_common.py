@@ -76,6 +76,15 @@ FACTOR_RECIPES = {
 # regression then has nearly as many regressors as observations). We cap at 3.
 BAI_NG_K_MAX = 3
 
+# IC-weighted combination (v3 trading layer).
+# Lookback window for the rolling mean IC used to set per-factor weights.
+IC_LOOKBACK_WEEKS = 8
+
+# Factors eligible for the IC-weighted trading signal. RC is a level factor
+# (market return), not sortable. TVLC and SupC are excluded for sparse
+# coverage (< 30 weeks of data in the 52-week sample).
+IC_TRADEABLE_FACTORS = {"SMBC", "MomC", "VolC", "FunC", "NetMom", "NetRel"}
+
 # Regime indicators used inside 03_regime_detector for the IC-blend weight.
 # These are market-wide (constant within a week) and were deliberately
 # excluded from the cross-sectional factor model — they describe the *state*

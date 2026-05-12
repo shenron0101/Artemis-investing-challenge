@@ -212,44 +212,46 @@ def attribution(weights: pd.DataFrame, ret_panel: pd.DataFrame, blended: pd.Data
     long_pnl = df[df["w"] > 0].groupby("week").apply(lambda x: (x["w"] * x["fwd_ret_1w"]).sum())
     short_pnl = df[df["w"] < 0].groupby("week").apply(lambda x: (x["w"] * x["fwd_ret_1w"]).sum())
 
-    # Network / GX marginal attribution: build counterfactual portfolios that
-    # used only one of the two streams (i.e. set w_net=1 or w_net=0) and
-    # measure their pnl.
-    bl = blended.copy()
-    weeks = sorted(weights["week"].unique())
-    rows: list[dict] = []
-    for wk in weeks:
-        block = bl[bl["week"] == wk].copy()
-        actual_w = weights[weights["week"] == wk].set_index("symbol")["w"]
-        if block.empty or actual_w.empty:
-            continue
-        ranks_net = block.set_index("symbol")["E_net_z"].rank()
-        ranks_gx = block.set_index("symbol")["E_gx_z"].rank()
-        rets = ret_panel[ret_panel["week"] == wk].set_index("symbol")["fwd_ret_1w"]
-        if ranks_net.empty or ranks_gx.empty:
-            continue
-        # contribution proxy: align the *actual* signs of w with each rank stream and recompute pnl
-        # Simpler & well-defined: how would top/bottom quintile of each stream alone have performed?
-        n = len(ranks_net)
-        n_long = max(int(round(n * 0.20)), 5)
-        def _ls_pnl(rk: pd.Series) -> float:
-            longs = rk[rk > n - n_long].index
-            shorts = rk[rk <= n_long].index
-            r_long = rets.reindex(longs).mean()
-            r_short = rets.reindex(shorts).mean()
-            return float((r_long if pd.notna(r_long) else 0) - (r_short if pd.notna(r_short) else 0))
-        rows.append({
-            "week": wk,
-            "pnl_net_only": _ls_pnl(ranks_net),
-            "pnl_gx_only": _ls_pnl(ranks_gx),
-        })
-    standalone = pd.DataFrame(rows)
-    return pd.DataFrame({
+    # Standalone stream attribution: supported when blended contains per-stream
+    # z-score columns. In v3 (IC-weighted combination) those columns are absent
+    # — skip gracefully and return long/short split only.
+    has_stream_cols = "E_net_z" in blended.columns and "E_gx_z" in blended.columns
+    standalone = pd.DataFrame()
+    if has_stream_cols:
+        bl = blended.copy()
+        weeks = sorted(weights["week"].unique())
+        rows: list[dict] = []
+        for wk in weeks:
+            block = bl[bl["week"] == wk].copy()
+            actual_w = weights[weights["week"] == wk].set_index("symbol")["w"]
+            if block.empty or actual_w.empty:
+                continue
+            ranks_net = block.set_index("symbol")["E_net_z"].rank()
+            ranks_gx = block.set_index("symbol")["E_gx_z"].rank()
+            rets = ret_panel[ret_panel["week"] == wk].set_index("symbol")["fwd_ret_1w"]
+            if ranks_net.empty or ranks_gx.empty:
+                continue
+            n = len(ranks_net)
+            n_long = max(int(round(n * 0.20)), 5)
+            def _ls_pnl(rk: pd.Series) -> float:
+                longs = rk[rk > n - n_long].index
+                shorts = rk[rk <= n_long].index
+                r_long = rets.reindex(longs).mean()
+                r_short = rets.reindex(shorts).mean()
+                return float((r_long if pd.notna(r_long) else 0) - (r_short if pd.notna(r_short) else 0))
+            rows.append({
+                "week": wk,
+                "pnl_net_only": _ls_pnl(ranks_net),
+                "pnl_gx_only": _ls_pnl(ranks_gx),
+            })
+        standalone = pd.DataFrame(rows)
+    base = pd.DataFrame({
         "week": long_pnl.index,
         "pnl_long": long_pnl.values,
-    }).merge(short_pnl.rename("pnl_short").reset_index(), on="week", how="left").merge(
-        standalone, on="week", how="left",
-    )
+    }).merge(short_pnl.rename("pnl_short").reset_index(), on="week", how="left")
+    if not standalone.empty:
+        return base.merge(standalone, on="week", how="left")
+    return base
 
 
 def _figures(strategies: dict[str, pd.DataFrame], in_sample_cut: pd.Timestamp) -> None:

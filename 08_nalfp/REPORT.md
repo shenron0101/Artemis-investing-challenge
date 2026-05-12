@@ -1,10 +1,10 @@
-# NALFP v2 — Network-Augmented Latent Factor Portfolio
+# NALFP v3 — Network-Augmented Latent Factor Portfolio
 
     A weekly-rebalanced long/short crypto factor strategy combining:
 
     1. **Pillar 1 — Network structure.** Rolling 12-week Spearman MST + Louvain communities produce two cross-sectional signals: `within_cluster_mom` and `cross_cluster_rel`.
     2. **Pillar 2 — Crypto Factor Zoo + Giglio-Xiu pricing.** Nine economically-named factor portfolios (RC, SMBC, MomC, VolC, TVLC, FunC, SupC, NetMom, NetRel) fed through the Giglio-Xiu (2021) three-pass framework. Hidden factors are extracted by PCA on residuals; the number $K_\text{hidden}$ is selected by Bai-Ng IC$_{p2}$.
-    3. **Pillar 3 — Adaptive blend + portfolio.** IC-proportional blend of the network and GX signals, traded as a long/short quintile portfolio with cluster, asset, turnover and vol-target constraints.
+    3. **Pillar 3 — IC-weighted factor combination.** Each tradeable factor is an independent signal stream. A rolling 8-week mean IC (lagged 1 week, strictly OOS) sets IC-proportional weights across six factors (SMBC, MomC, VolC, FunC, NetMom, NetRel). The portfolio is a long/short quintile with cluster, asset, turnover, and vol-target constraints.
 
     ## 1. Factor Zoo — full-sample statistics
 
@@ -130,11 +130,26 @@ The Giglio-Xiu correction is designed to debias observed factor premia when late
     - Rolling 12-week Spearman correlation → Mantegna distance → MST → Louvain.
     - Across 41 clustered weeks the partition contains **7–11** communities (mean entropy 2.175). The market is persistently fragmented; we did not observe a clean convergence regime in this slice.
 
-    ## 5. Regime Blend
+    ## 5. IC-Weighted Factor Combination (Pillar 3)
 
-    Mean adaptive weight on the network signal: $\bar w_\text{net}$ = 0.249 (range 0.000–1.000).
-    Full-sample mean IC — network: 0.005, GX: 0.073.
-    OOS mean IC — network: -0.014, GX: 0.041.
+    Each tradeable factor (SMBC, MomC, VolC, FunC, NetMom, NetRel) is an independent signal stream. The portfolio
+    uses a rolling 8-week mean Spearman IC, lagged 1 week (strictly OOS), to assign IC-proportional weights:
+    $w_{k,t} \propto \max(\widehat{\text{IC}}_{k,t},\, 0)$.
+    When all factors have non-positive IC in the lookback window, weights revert to equal weight.
+
+    **Per-factor mean IC (full sample / OOS):**
+
+    | Factor | Full-sample IC | OOS IC | Mean weight |
+    |---|---|---|---|
+    | FunC | 0.001 | 0.017 | 0.144 |
+    | MomC | 0.026 | 0.020 | 0.107 |
+    | NetMom | 0.006 | 0.002 | 0.075 |
+    | NetRel | 0.046 | 0.022 | 0.185 |
+    | SMBC | 0.015 | 0.056 | 0.095 |
+    | VolC | 0.090 | 0.104 | 0.442 |
+
+    Equal-weight fallback triggered in 10% of weeks.
+    IC lookback: 8 weeks.
 
     ## 6. Portfolio Construction
 
@@ -144,15 +159,15 @@ The Giglio-Xiu correction is designed to debias observed factor premia when late
 
     | Strategy | Window | Weeks | Ann.Return | Ann.Vol | Sharpe | 95% CI | MaxDD | Turnover | Hit% |
 |---|---|---|---|---|---|---|---|---|---|
-| NALFP | full | 48 | 5.9% | 11.2% | 0.53 | — | -7.06% | 7.6% | 60% |
-| NALFP | train | 24 | 26.5% | 11.5% | 2.30 | — | -7.06% | 7.8% | 67% |
-| NALFP | oos | 24 | -14.8% | 10.3% | -1.44 | [-3.45, 1.18] | -6.64% | 7.4% | 54% |
+| NALFP | full | 48 | 7.5% | 7.3% | 1.03 | — | -3.60% | 7.7% | 58% |
+| NALFP | train | 24 | 6.3% | 7.7% | 0.83 | — | -3.60% | 6.7% | 50% |
+| NALFP | oos | 24 | 8.7% | 7.0% | 1.24 | [-2.01, 4.80] | -3.47% | 8.7% | 67% |
 | EW_mom_long | full | 49 | 25.2% | 54.1% | 0.47 | — | -47.97% | 35.5% | 59% |
-| EW_mom_long | train | 24 | -9.0% | 64.2% | -0.14 | — | -30.88% | 37.7% | 50% |
-| EW_mom_long | oos | 25 | 58.1% | 43.0% | 1.35 | [-2.08, 6.61] | -24.80% | 33.4% | 68% |
-| NALFP_no_cluster_cap | full | 48 | 4.6% | 11.3% | 0.40 | — | -7.95% | 7.6% | 58% |
-| NALFP_no_cluster_cap | train | 24 | 26.5% | 11.5% | 2.30 | — | -7.06% | 7.8% | 67% |
-| NALFP_no_cluster_cap | oos | 24 | -17.4% | 10.3% | -1.69 | [-3.66, 1.11] | -7.76% | 7.4% | 50% |
+| EW_mom_long | train | 25 | -14.1% | 63.0% | -0.22 | — | -32.69% | 37.2% | 48% |
+| EW_mom_long | oos | 24 | 66.2% | 43.6% | 1.52 | [-1.92, 7.06] | -24.80% | 33.8% | 71% |
+| NALFP_no_cluster_cap | full | 48 | 7.5% | 7.3% | 1.03 | — | -3.60% | 7.7% | 58% |
+| NALFP_no_cluster_cap | train | 24 | 6.3% | 7.7% | 0.83 | — | -3.60% | 6.7% | 50% |
+| NALFP_no_cluster_cap | oos | 24 | 8.7% | 7.0% | 1.24 | [-2.01, 4.80] | -3.47% | 8.7% | 67% |
 | plus_lat | full | 16 | 129.0% | 34.4% | 3.75 | — | -7.39% | 65.1% | 69% |
 | plus_lat | oos | 16 | 129.0% | 34.4% | 3.75 | [0.51, 8.89] | -7.39% | 65.1% | 69% |
 
@@ -173,7 +188,7 @@ The Giglio-Xiu correction is designed to debias observed factor premia when late
     ```
     python3 08_nalfp/01_network_dynamics.py
     python3 08_nalfp/02_factor_pricing.py
-    python3 08_nalfp/03_regime_detector.py
+    python3 08_nalfp/03_signal_combination.py
     python3 08_nalfp/04_portfolio_construction.py
     python3 08_nalfp/05_backtest.py
     python3 08_nalfp/06_report.py

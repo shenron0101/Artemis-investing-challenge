@@ -233,7 +233,7 @@ def factor_commentary(stats: pd.DataFrame, lam_full: pd.DataFrame, lam_obs: pd.D
 def main() -> None:
     m_network = _load_json("01_network_manifest.json")
     m_factor = _load_json("02_factor_pricing_manifest.json")
-    m_regime = _load_json("03_regime_manifest.json")
+    m_signal = _load_json("03_signal_combination_manifest.json")
     m_portfolio = _load_json("04_portfolio_manifest.json")
     metrics = _load_json("05_metrics.json")
 
@@ -244,13 +244,13 @@ def main() -> None:
     k_hidden = int(m_factor.get("k_hidden_chosen", 0))
 
     md = dedent(f"""
-    # NALFP v2 — Network-Augmented Latent Factor Portfolio
+    # NALFP v3 — Network-Augmented Latent Factor Portfolio
 
     A weekly-rebalanced long/short crypto factor strategy combining:
 
     1. **Pillar 1 — Network structure.** Rolling 12-week Spearman MST + Louvain communities produce two cross-sectional signals: `within_cluster_mom` and `cross_cluster_rel`.
     2. **Pillar 2 — Crypto Factor Zoo + Giglio-Xiu pricing.** Nine economically-named factor portfolios (RC, SMBC, MomC, VolC, TVLC, FunC, SupC, NetMom, NetRel) fed through the Giglio-Xiu (2021) three-pass framework. Hidden factors are extracted by PCA on residuals; the number $K_\\text{{hidden}}$ is selected by Bai-Ng IC$_{{p2}}$.
-    3. **Pillar 3 — Adaptive blend + portfolio.** IC-proportional blend of the network and GX signals, traded as a long/short quintile portfolio with cluster, asset, turnover and vol-target constraints.
+    3. **Pillar 3 — IC-weighted factor combination.** Each tradeable factor is an independent signal stream. A rolling 8-week mean IC (lagged 1 week, strictly OOS) sets IC-proportional weights across six factors (SMBC, MomC, VolC, FunC, NetMom, NetRel). The portfolio is a long/short quintile with cluster, asset, turnover, and vol-target constraints.
 
     ## 1. Factor Zoo — full-sample statistics
 
@@ -305,11 +305,29 @@ def main() -> None:
     - Rolling {m_network.get('window_weeks', 12)}-week Spearman correlation → Mantegna distance → MST → Louvain.
     - Across {m_network.get('weeks_clustered', '—')} clustered weeks the partition contains **{m_network.get('min_clusters')}–{m_network.get('max_clusters')}** communities (mean entropy {_fmt(m_network.get('mean_entropy'))}). The market is persistently fragmented; we did not observe a clean convergence regime in this slice.
 
-    ## 5. Regime Blend
+    ## 5. IC-Weighted Factor Combination (Pillar 3)
 
-    Mean adaptive weight on the network signal: $\\bar w_\\text{{net}}$ = {_fmt(m_regime.get('w_net_mean'))} (range {_fmt(m_regime.get('w_net_min'))}–{_fmt(m_regime.get('w_net_max'))}).
-    Full-sample mean IC — network: {_fmt(m_regime.get('ic_net_full_sample_mean'))}, GX: {_fmt(m_regime.get('ic_gx_full_sample_mean'))}.
-    OOS mean IC — network: {_fmt(m_regime.get('ic_net_oos_mean'))}, GX: {_fmt(m_regime.get('ic_gx_oos_mean'))}.
+    Each tradeable factor (SMBC, MomC, VolC, FunC, NetMom, NetRel) is an independent signal stream. The portfolio
+    uses a rolling 8-week mean Spearman IC, lagged 1 week (strictly OOS), to assign IC-proportional weights:
+    $w_{{k,t}} \\propto \\max(\\widehat{{\\text{{IC}}}}_{{k,t}},\\, 0)$.
+    When all factors have non-positive IC in the lookback window, weights revert to equal weight.
+
+    **Per-factor mean IC (full sample / OOS):**
+
+    | Factor | Full-sample IC | OOS IC | Mean weight |
+    |---|---|---|---|
+""" + "\n".join(
+        "    | {f} | {ic} | {ic_oos} | {wt} |".format(
+            f=f,
+            ic=_fmt((m_signal.get("per_factor_ic_mean") or {}).get(f)),
+            ic_oos=_fmt((m_signal.get("per_factor_ic_oos_mean") or {}).get(f)),
+            wt=_fmt((m_signal.get("per_factor_weight_mean") or {}).get(f)),
+        )
+        for f in sorted(["SMBC", "MomC", "VolC", "FunC", "NetMom", "NetRel"])
+    ) + f"""
+
+    Equal-weight fallback triggered in {_fmt(m_signal.get('fallback_eq_weight_frac', 0.0), pct=True, dp=0)} of weeks.
+    IC lookback: {m_signal.get('ic_lookback_weeks', 8)} weeks.
 
     ## 6. Portfolio Construction
 
@@ -336,7 +354,7 @@ def main() -> None:
     ```
     python3 08_nalfp/01_network_dynamics.py
     python3 08_nalfp/02_factor_pricing.py
-    python3 08_nalfp/03_regime_detector.py
+    python3 08_nalfp/03_signal_combination.py
     python3 08_nalfp/04_portfolio_construction.py
     python3 08_nalfp/05_backtest.py
     python3 08_nalfp/06_report.py

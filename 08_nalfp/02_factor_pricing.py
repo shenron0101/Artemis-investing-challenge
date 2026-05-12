@@ -206,6 +206,38 @@ def _ic_for_recipe(df: pd.DataFrame, recipe: dict) -> float:
     return float(sign * ic_series.mean())
 
 
+def _ic_timeseries_for_recipe(df: pd.DataFrame, recipe: dict) -> pd.Series:
+    """Per-week Spearman IC of the underlying characteristic vs forward return.
+
+    Returns a Series indexed by week. Direction-signed so positive IC means
+    the characteristic predicts returns in the intended direction."""
+    if recipe["kind"] == "market":
+        return pd.Series(dtype=float)
+    col = recipe["sort_col"]
+    sign = recipe["direction"]
+    sub = df.dropna(subset=[col, "fwd_ret_1w"])
+
+    def _ic(block: pd.DataFrame) -> float:
+        if len(block) < 6:
+            return np.nan
+        return block[col].rank().corr(block["fwd_ret_1w"].rank())
+
+    ic_series = sub.groupby("week").apply(_ic)
+    return (sign * ic_series).rename(col)
+
+
+def build_factor_ic_timeseries(df: pd.DataFrame) -> pd.DataFrame:
+    """Long (week, factor, ic) frame of per-week signed IC for every sort factor."""
+    rows: list[dict] = []
+    for name, recipe in FACTOR_RECIPES.items():
+        if recipe["kind"] == "market":
+            continue
+        ic_series = _ic_timeseries_for_recipe(df, recipe)
+        for week, ic_val in ic_series.items():
+            rows.append({"week": pd.Timestamp(week), "factor": name, "ic": ic_val})
+    return pd.DataFrame(rows)
+
+
 def factor_stats(zoo: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for name in zoo.columns:
@@ -550,6 +582,10 @@ def main() -> None:
     write_frame(zoo.reset_index(), DATA_DIR / "factor_zoo_returns")
     write_frame(stats, DATA_DIR / "factor_zoo_stats")
     write_frame(corr.reset_index().rename(columns={"index": "factor"}), DATA_DIR / "factor_correlations")
+
+    print("\nbuilding per-week IC timeseries for signal combination ...")
+    ic_ts = build_factor_ic_timeseries(df)
+    write_frame(ic_ts, DATA_DIR / "factor_ic_timeseries")
 
     print("\nrunning Giglio-Xiu walk-forward ...")
     E_df, gx_final = walk_forward_expected_returns(zoo, df)
