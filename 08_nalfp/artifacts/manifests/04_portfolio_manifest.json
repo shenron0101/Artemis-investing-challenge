@@ -4,7 +4,7 @@
   "max_cluster_fraction": 0.4,
   "turnover_cap": 0.3,
   "vol_target_annual": 0.15,
-  "weeks": 40,
+  "weeks": 48,
   "median_long_n": 16,
   "median_short_n": 16
 }

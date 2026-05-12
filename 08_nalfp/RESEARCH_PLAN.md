@@ -95,32 +95,41 @@ Weekly data pull (Monday)
 
 ---
 
-## Step 2 — Pillar 2: IPCA Expected-Return Estimation (`02_ipca_pricing.py`)
+## Step 2 — Pillar 2: Crypto Factor Zoo + Giglio-Xiu Pricing (`02_factor_pricing.py`)
 
-**Inputs**: Weekly return panel from 06, factor signals from 04, network signals from Step 1
+The first version of this pillar used Instrumented PCA (Kelly-Pruitt-Su 2019) on lagged characteristics. v2 replaces that with **explicit factor portfolios + Giglio-Xiu (2021) three-pass hidden-factor pricing**. The change is motivated by reviewer feedback that the v1 IPCA layer obscured *which* factors the strategy was actually exposed to and lacked per-factor economic commentary.
 
-The key innovation over existing 07_hidden_factor_pricing work is replacing static beta estimation with **Instrumented PCA** (Kelly, Pruitt & Su 2019):
+### 2.1 Factor zoo (9 named long/short portfolios)
 
-1. Assemble instrument matrix **Z_it** (N×L), each row = asset i's observable characteristics at t-1:
-   - Existing factors: M (4-week momentum), V (volatility rank), C (correlation rank), F (fundamental yield), S (supply absorption)
-   - Pillar 1 outputs: `within_cluster_mom`, `cross_cluster_rel`
-   - Macro: `stable_inflow_z` (stablecoin inflow z-score from 06 panel)
-   - Total L ≈ 8 instruments
+| Factor | Construction | Source |
+|---|---|---|
+| RC | Value-weighted return of the universe | Hartmann 2025 |
+| SMBC | Long bottom 30% by log-mcap, short top 30% | Hartmann 2025; FF 1993 |
+| MomC | Long top 30% by mom_4w, short bottom 30% | Liu-Tsyvinski 2022 |
+| VolC | Long bottom 30% by vol_4w (low-vol), short top 30% | Frazzini-Pedersen 2014 |
+| TVLC | Long top 30% by tvl_to_mcap, short bottom 30% | Hartmann 2025; TVL Irrelevance 2025 |
+| FunC | Long top 30% by F_yield = (fees+0.5·rev)/mcap, short bottom 30% | RAAM v2 stage 04 |
+| SupC | Long top 30% by supply absorption, short bottom 30% | RAAM v2 stage 04 |
+| NetMom | Within each cluster: long top half by within-cluster-momentum, short bottom half; average across clusters | Liu-Tsyvinski 2018 |
+| NetRel | Long top 30% by (own 4w − mean 4w of other clusters), short bottom 30% | Liu-Tsyvinski 2018 |
 
-2. Factor loadings time-vary: β_it = Z_it × Γ, where Γ (L×K) maps characteristics to K latent factors
+Each factor is a *tradable* long/short equal-weight portfolio with a weekly return time series.
 
-3. Estimate Γ and latent factors F_t jointly by alternating least squares:
-   - For fixed Γ: F_t = (Z_t Γ)ᵀ R_t via OLS cross-sectionally each week
-   - For fixed F_t: update Γ by regressing returns onto Z_t-implied loadings
-   - K=3 latent factors (consistent with PCA analysis in 07)
+### 2.2 Giglio-Xiu three-pass framework
 
-4. Expected return: `E[r_it+1] = Z_it × Γ × λ` where λ = latent risk premia estimated from time series of F_t
+Pass 1 — for each asset, OLS time-series regression of returns on the 9 observed factor returns → β_i^obs and residuals ε_i.
 
-5. Survival filter: retain factor k only if |t(λ_k)| ≥ 1.65 (same rule used in 07_hidden_factor_pricing)
+Pass 2 — PCA on the residual matrix; choose the number of latent factors K_hidden by Bai-Ng (2002) IC_p2; the top K_hidden principal components are F^hidden_t.
 
-**Why IPCA over standard PCA**: Static PCA (as in 07) uses fixed loadings and cannot use time-varying characteristics to predict future returns. IPCA loadings vary with characteristics — when an asset's momentum rank changes, its effective beta changes automatically.
+Pass 3 — refit β on the combined factor matrix [F^obs, F^hidden]; run cross-sectional Fama-MacBeth to estimate λ̂ with heteroskedasticity-robust SE.
 
-**Reuses**: `07_hidden_factor_pricing/04_price_models.py` Fama-MacBeth step; `06_artemis_econometrics/01_build_panel.py` weekly panel
+Walk-forward expected return: E[r_{i,t+1}] = β_i' λ̂, with β and λ̂ refit every 4 weeks on the expanding training window.
+
+### 2.3 Why GX over IPCA
+
+GX directly addresses *omitted factor bias* in observed-only Fama-MacBeth, which is the relevant econometric concern for crypto pricing (cf. Hartmann 2025). IPCA solves a different problem (time-varying loadings via characteristics) and was harder to interpret per-factor. GX gives us a clean per-factor risk-premium table that can be compared with prior literature.
+
+**Reuses**: stage-07 already produces `crypto_market`, `crypto_smb`, `crypto_mom`, `crypto_tvl` — we recompute these inside `02_factor_pricing.py` for consistency with the network panel timing, and add the five new factors (VolC, FunC, SupC, NetMom, NetRel).
 
 ---
 

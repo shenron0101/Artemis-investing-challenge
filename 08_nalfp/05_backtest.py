@@ -212,7 +212,7 @@ def attribution(weights: pd.DataFrame, ret_panel: pd.DataFrame, blended: pd.Data
     long_pnl = df[df["w"] > 0].groupby("week").apply(lambda x: (x["w"] * x["fwd_ret_1w"]).sum())
     short_pnl = df[df["w"] < 0].groupby("week").apply(lambda x: (x["w"] * x["fwd_ret_1w"]).sum())
 
-    # Network / IPCA marginal attribution: build counterfactual portfolios that
+    # Network / GX marginal attribution: build counterfactual portfolios that
     # used only one of the two streams (i.e. set w_net=1 or w_net=0) and
     # measure their pnl.
     bl = blended.copy()
@@ -224,9 +224,9 @@ def attribution(weights: pd.DataFrame, ret_panel: pd.DataFrame, blended: pd.Data
         if block.empty or actual_w.empty:
             continue
         ranks_net = block.set_index("symbol")["E_net_z"].rank()
-        ranks_ipca = block.set_index("symbol")["E_ipca_z"].rank()
+        ranks_gx = block.set_index("symbol")["E_gx_z"].rank()
         rets = ret_panel[ret_panel["week"] == wk].set_index("symbol")["fwd_ret_1w"]
-        if ranks_net.empty or ranks_ipca.empty:
+        if ranks_net.empty or ranks_gx.empty:
             continue
         # contribution proxy: align the *actual* signs of w with each rank stream and recompute pnl
         # Simpler & well-defined: how would top/bottom quintile of each stream alone have performed?
@@ -241,7 +241,7 @@ def attribution(weights: pd.DataFrame, ret_panel: pd.DataFrame, blended: pd.Data
         rows.append({
             "week": wk,
             "pnl_net_only": _ls_pnl(ranks_net),
-            "pnl_ipca_only": _ls_pnl(ranks_ipca),
+            "pnl_gx_only": _ls_pnl(ranks_gx),
         })
     standalone = pd.DataFrame(rows)
     return pd.DataFrame({

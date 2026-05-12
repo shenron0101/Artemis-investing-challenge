@@ -38,28 +38,48 @@ LAYOUT = dict(
 # is defined rather than from sample-start.
 TRAIN_WEEKS = 24
 
-# Universe of instruments fed into IPCA Z_it (lagged characteristics).
-# Each instrument MUST have cross-sectional variance within a week, otherwise
-# the per-week z-score collapses it to zero and the corresponding Γ row
-# becomes mechanically uninformative. The two market-wide scalars
-# (`network_entropy`, `stable_inflow_z`) were initially candidates here but
-# were *removed* after validation showed they are broadcast and therefore
-# unidentifiable inside IPCA — they now enter the model only as regime
-# indicators in `03_regime_detector.py`, where they vary over time.
-INSTRUMENT_COLS = [
-    "mom_4w",        # M — 4-week momentum
-    "vol_4w",        # V — realised volatility (low-vol premium)
-    "log_mcap",      # size proxy
-    "turnover",      # liquidity proxy
-    "F_yield",       # fundamental yield
-    "S_supply",      # supply-absorption composite
-    "G_growth",      # activity-validated growth
-    "within_cluster_mom",  # network: relative strength inside cluster
-    "cross_cluster_rel",   # network: relative strength vs other clusters
-]
+# --------------------------------------------------------------------------- #
+# Crypto Factor Zoo recipes.
+#
+# Each entry defines a named long/short factor portfolio. `sort_col` is the
+# cross-sectional characteristic used to sort assets every week; `direction`
+# is +1 (long top, short bottom) or -1 (long bottom, short top). `frac`
+# is the tercile cutoff (0.30 default = bottom 30% vs top 30%). Sources
+# are documented in the v2 plan and in the paper. Factors that need extra
+# logic (within-cluster ranking, value-weighted market) are flagged with a
+# dedicated `kind` and handled directly in 02_factor_pricing.
+# --------------------------------------------------------------------------- #
+FACTOR_RECIPES = {
+    "RC":     dict(kind="market", paper="Hartmann 2025"),
+    "SMBC":   dict(kind="sort", sort_col="log_mcap",         direction=-1, frac=0.30,
+                   paper="Hartmann 2025; Fama-French 1993"),
+    "MomC":   dict(kind="sort", sort_col="mom_4w",           direction=+1, frac=0.30,
+                   paper="Hartmann 2025; Liu-Tsyvinski 2022"),
+    "VolC":   dict(kind="sort", sort_col="vol_4w",           direction=-1, frac=0.30,
+                   paper="Frazzini-Pedersen 2014"),
+    "TVLC":   dict(kind="sort", sort_col="tvl_to_mcap",      direction=+1, frac=0.30,
+                   paper="Hartmann 2025; TVL Irrelevance 2025"),
+    "FunC":   dict(kind="sort", sort_col="F_yield",          direction=+1, frac=0.30,
+                   paper="RAAM v2 stage 04"),
+    "SupC":   dict(kind="sort", sort_col="S_supply",         direction=+1, frac=0.30,
+                   paper="RAAM v2 stage 04"),
+    "NetMom": dict(kind="cluster_neutral_sort",
+                   sort_col="within_cluster_mom", direction=+1, frac=0.50,
+                   paper="Liu & Tsyvinski 2018"),
+    "NetRel": dict(kind="sort", sort_col="cross_cluster_rel", direction=+1, frac=0.30,
+                   paper="Liu & Tsyvinski 2018"),
+}
 
-# Market-wide regime indicators (vary over time, constant within a week).
-# These are consumed by 03_regime_detector but never by IPCA itself.
+# Hidden-factor PCA: max K we will consider for the Bai-Ng IC_p2 search.
+# On a 24-week training window with ~85 assets and 7 observed factors, picking
+# more than ~3 hidden factors approaches overfitting (the time-series
+# regression then has nearly as many regressors as observations). We cap at 3.
+BAI_NG_K_MAX = 3
+
+# Regime indicators used inside 03_regime_detector for the IC-blend weight.
+# These are market-wide (constant within a week) and were deliberately
+# excluded from the cross-sectional factor model — they describe the *state*
+# of the market, not the cross-section.
 REGIME_COLS = ["network_entropy", "stable_inflow_z"]
 
 
