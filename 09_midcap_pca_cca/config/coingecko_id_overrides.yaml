@@ -1,0 +1,38 @@
+overrides:
+  BTC: bitcoin
+  ETH: ethereum
+  BNB: binancecoin
+  XRP: ripple
+  ADA: cardano
+  DOGE: dogecoin
+  SOL: solana
+  DOT: polkadot
+  MATIC: matic-network
+  SHIB: shiba-inu
+  AVAX: avalanche-2
+  LINK: chainlink
+  ATOM: cosmos
+  UNI: uniswap
+  LTC: litecoin
+  NEAR: near
+  ALGO: algorand
+  FIL: filecoin
+  XMR: monero
+  APT: aptos
+  ARB: arbitrum
+  OP: optimism
+  MKR: maker
+  AAVE: aave
+  GRT: the-graph
+  SAND: the-sandbox
+  MANA: decentraland
+  AXS: axie-infinity
+  THETA: theta-token
+  FTm: fantom
+
+notes: |
+  Manual mappings from CMC symbol to CoinGecko coin ID.
+  Use this when the automatic symbol-based lookup in 01_fetch_coingecko.py
+  fails to find a match or finds the wrong coin (e.g., common symbol collisions).
+  Add entries here only for assets that appear in CMC rankings but cannot be
+  automatically resolved to a CoinGecko ID.

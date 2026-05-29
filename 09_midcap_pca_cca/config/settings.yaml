@@ -1,0 +1,74 @@
+universe:
+  rank_min: 21
+  rank_max: 70
+  hysteresis_buffer: 5
+  supply_growth_penalty: true
+  supply_growth_threshold: 0.10
+  ranking_source: artemis
+
+pca:
+  window_weeks: 12
+  ewma_halflife_weeks: 4
+  min_shared_weeks: 8
+  n_parallel_analysis_permutations: 100
+  parallel_analysis_alpha: 0.05
+  sign_alignment: true
+  rmt_denoising: true
+
+cca:
+  macro_assets:
+    - BTC
+    - SPY
+    - VIX
+  rolling_window_weeks: 52
+  n_permutations: 1000
+
+calendar:
+  exchange: NYSE
+  rebalance_day: Friday
+  rebalance_time: "16:00"
+  timezone: America/New_York
+
+coingecko:
+  base_url: "https://api.coingecko.com/api/v3"
+  api_key: null
+  sleep_seconds: 1.0
+  chunk_days: 365
+
+artemis:
+  api_key: "4McqRfGJ2N-ot-BRrWfdZtQk3YndMOSjaoq3VRRLvkQ"
+  base_url: "https://data-svc.artemisxyz.com"
+  sleep_seconds: 0.75
+  metrics:
+    - PRICE
+    - MC
+    - CIRCULATING_SUPPLY_NATIVE
+    - 24H_VOLUME
+    - FDMC
+
+cmc:
+  base_url: "https://coinmarketcap.com/historical"
+  start_date: "20210103"
+  headless: true
+  min_delay: 3.0
+  max_delay: 7.0
+  min_rows_per_snapshot: 80
+
+portfolio:
+  long_weight: 0.8
+  short_weight: 0.2
+  n_quintiles: 5
+
+paths:
+  data_dir: "data"
+  raw_dir: "data/raw"
+  clean_dir: "data/clean"
+  features_dir: "data/features"
+  artifacts_dir: "artifacts"
+  manifests_dir: "artifacts/manifests"
+  figures_dir: "artifacts/figures"
+  cmc_cache_dir: "data/raw/cmc_snapshots"
+  coingecko_cache_dir: "data/raw/coingecko"
+
+logging:
+  level: INFO
