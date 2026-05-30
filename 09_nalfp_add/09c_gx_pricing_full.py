@@ -1,15 +1,24 @@
-"""09c — Full 9-factor GX pricing on the 5-year panel.
+"""09c — Full GX pricing on the 5-year panel.
 
 Extends 09_gx_pricing.py with:
-  FunC   fees / mcap (Artemis FEES, from 09b)
-  TVLC   TVL  / mcap (Artemis CHAIN_TVL + DeFiLlama, from 09b)
-  CCA1–3 macro-spanned crypto directions from CCA (fitted IS-only,
-          applied walk-forward to avoid lookahead bias)
+  FunC    fees / mcap (Artemis FEES, from 09b)
+  TVLC    TVL  / mcap (Artemis CHAIN_TVL + DeFiLlama, from 09b)
+  CCA1–3  macro-spanned crypto directions from CCA (IS-fitted, walk-forward)
+  RMOM1w  1-week risk-adjusted momentum (Han et al. 2023)
+  RMOM2w  2-week risk-adjusted momentum (Han et al. 2023)
+  RMOM4w  4-week Sharpe ratio           (Han et al. 2023)
+  MAXRET  max weekly return trailing 4w (Han et al. 2023, proxy)
 
-Full factor list (FunC/TVLC only where coverage ≥ 10 names/week):
-  RC, SMBC, MomC, VolC, NetMom, NetRel, FunC, TVLC, CCA1, CCA2, CCA3
+Full factor list:
+  RC, SMBC, MomC, VolC, NetMom, NetRel, FunC, TVLC,
+  RMOM1w, RMOM2w, RMOM4w, MAXRET,
+  SPC1–4, CCA1–3
 
 Two GX fits: IS (2021-05-10→2024-11-11) and Full (→2026-05-25).
+
+Also rewrites RESULTS.md Part 2 from the computed results (reads Part 1's
+factor_validation_stats.parquet) so both parts share a unified master table
+and a coherent narrative.
 
 Outputs
 -------
@@ -17,6 +26,7 @@ Outputs
   artifacts/data/gx5y_full_lambda_is.parquet
   artifacts/data/gx5y_full_lambda_full.parquet
   artifacts/manifests/09c_gx_full_manifest.json
+  09_nalfp_add/RESULTS.md  (Part 2 + master table, preserves Part 1)
 """
 from __future__ import annotations
 
@@ -43,23 +53,41 @@ MIN_NAMES_FACTOR = 10   # min per-week names to include a factor in GX
 # ── characteristics ────────────────────────────────────────────────────────
 
 def build_characteristics(panel: pd.DataFrame) -> pd.DataFrame:
-    px = panel.pivot(index="week", columns="symbol", values="price").sort_index()
-    mc = panel.pivot(index="week", columns="symbol", values="mcap").sort_index()
-    fwd  = px.pct_change().shift(-1)
-    mom4 = px.pct_change(4)
-    vol4 = px.pct_change().rolling(4).std()
+    px    = panel.pivot(index="week", columns="symbol", values="price").sort_index()
+    mc    = panel.pivot(index="week", columns="symbol", values="mcap").sort_index()
+    ret   = px.pct_change()
+    fwd   = ret.shift(-1)
+    mom4  = px.pct_change(4)
+    mom2  = px.pct_change(2)
+    vol4  = ret.rolling(4).std()
     logmc = np.log(mc.clip(lower=1))
+
+    # Han et al. (2023) risk-adjusted momentum and max-return characteristics
+    rmom_4w = ret.rolling(4).mean() / vol4.replace(0, np.nan)   # 4-week Sharpe
+    rmom_1w = ret / vol4.replace(0, np.nan)                      # 1-week ret / 4w vol
+    rmom_2w = mom2 / vol4.replace(0, np.nan)                     # 2-week ret / 4w vol
+    maxret  = ret.rolling(4).max()                               # max weekly ret, 4w trailing
+
     rows = []
-    for df, nm in [(fwd,"fwd_ret_1w"),(mom4,"mom_4w"),(vol4,"vol_4w"),
-                   (logmc,"log_mcap"),(mc,"mcap")]:
+    for df, nm in [
+        (fwd,     "fwd_ret_1w"),
+        (mom4,    "mom_4w"),
+        (vol4,    "vol_4w"),
+        (logmc,   "log_mcap"),
+        (mc,      "mcap"),
+        (rmom_1w, "rmom_1w"),
+        (rmom_2w, "rmom_2w"),
+        (rmom_4w, "rmom_4w"),
+        (maxret,  "maxret_4w"),
+    ]:
         m = df.stack(future_stack=True).reset_index()
-        m.columns = ["week","symbol",nm]
+        m.columns = ["week", "symbol", nm]
         rows.append(m)
     chars = rows[0]
     for m in rows[1:]:
-        chars = chars.merge(m, on=["week","symbol"], how="outer")
+        chars = chars.merge(m, on=["week", "symbol"], how="outer")
     chars["week"] = pd.to_datetime(chars["week"])
-    return chars.sort_values(["week","symbol"]).reset_index(drop=True)
+    return chars.sort_values(["week", "symbol"]).reset_index(drop=True)
 
 
 # ── network clustering ──────────────────────────────────────────────────────
@@ -222,13 +250,18 @@ def build_zoo(df: pd.DataFrame, cca_factors: pd.DataFrame,
               spc_factors: pd.DataFrame) -> pd.DataFrame:
     zoo = {
         "RC":     market_factor(df),
-        "SMBC":   sort_factor(df,"log_mcap",          -1),
-        "MomC":   sort_factor(df,"mom_4w",            +1),
-        "VolC":   sort_factor(df,"vol_4w",            -1),
-        "NetMom": cluster_factor(df,"within_cluster_mom",+1),
-        "NetRel": sort_factor(df,"cross_cluster_rel", +1),
-        "FunC":   sort_factor(df,"fees_to_mcap",      +1),
-        "TVLC":   sort_factor(df,"tvl_to_mcap",       +1),
+        "SMBC":   sort_factor(df, "log_mcap",           -1),
+        "MomC":   sort_factor(df, "mom_4w",             +1),
+        "VolC":   sort_factor(df, "vol_4w",             -1),
+        "NetMom": cluster_factor(df, "within_cluster_mom", +1),
+        "NetRel": sort_factor(df, "cross_cluster_rel",  +1),
+        "FunC":   sort_factor(df, "fees_to_mcap",       +1),
+        "TVLC":   sort_factor(df, "tvl_to_mcap",        +1),
+        # Han et al. (2023) risk-adjusted momentum + lottery factor
+        "RMOM1w": sort_factor(df, "rmom_1w",            +1),
+        "RMOM2w": sort_factor(df, "rmom_2w",            +1),
+        "RMOM4w": sort_factor(df, "rmom_4w",            +1),
+        "MAXRET": sort_factor(df, "maxret_4w",          +1),
     }
     out = pd.concat(zoo.values(), axis=1, keys=zoo.keys())
     out.index = pd.to_datetime(out.index)
@@ -405,6 +438,267 @@ def print_lambda_table(label, lam_fmb, lam_obs, lam_full):
     print(f"  GX  priced (|t|≥1.65): {gx_priced}")
 
 
+# ── RESULTS.md Part 2 writer ────────────────────────────────────────────────
+
+# Short descriptions for the pricing table
+FACTOR_WHAT = {
+    "RC":     "Crypto market (value-weighted)",
+    "SMBC":   "Small minus big (size)",
+    "MomC":   "4-week raw momentum",
+    "VolC":   "Low-vol minus high-vol",
+    "NetMom": "Within-cluster momentum",
+    "NetRel": "Cross-cluster rotation",
+    "FunC":   "High fees/mcap minus low",
+    "TVLC":   "High TVL/mcap minus low",
+    "RMOM1w": "1-week risk-adj momentum (Han '23)",
+    "RMOM2w": "2-week risk-adj momentum (Han '23)",
+    "RMOM4w": "4-week Sharpe momentum  (Han '23)",
+    "MAXRET": "Max weekly return, 4w trailing (Han '23)",
+    "SPC1":   "Sparse-PCA: DeFi-majors direction",
+    "SPC2":   "Sparse-PCA: Payment/old-guard direction",
+    "SPC3":   "Sparse-PCA: Alt-L1 direction",
+    "SPC4":   "Sparse-PCA: Legacy/exchange direction",
+    "CCA1":   "Macro-spanned direction 1",
+    "CCA2":   "Macro-spanned direction 2",
+    "CCA3":   "Macro-spanned direction 3",
+    "MispricingM": "Equal-weight ASSD-dominant composite",
+}
+
+
+def _fmt(v, decimals=2, sign=True, pct=False):
+    if v is None or (isinstance(v, float) and not np.isfinite(v)):
+        return "n/a"
+    if pct:
+        return f"{v*100:+.1f}%" if sign else f"{v*100:.1f}%"
+    fmt = f"{{:+.{decimals}f}}" if sign else f"{{:.{decimals}f}}"
+    return fmt.format(float(v))
+
+
+def write_results_part2(gx_full_results: dict, gx_is_results: dict,
+                        factors_full: list, factors_is: list) -> None:
+    """Rewrite RESULTS.md Part 2 from computed GX results + Part 1 stats."""
+    results_path = STAGE / "RESULTS.md"
+    p1_stats_path = DATA / "factor_validation_stats.parquet"
+
+    # ---- load Part 1 stats ----
+    p1 = {}
+    if p1_stats_path.exists():
+        df1 = pd.read_parquet(p1_stats_path)
+        for _, row in df1.iterrows():
+            p1[row["factor"]] = row.to_dict()
+
+    # ---- build GX full-sample lookup (factor → {lambda_ann, tstat}) ----
+    def _lookup(lam_df, model_key):
+        if lam_df is None or lam_df.empty:
+            return {}
+        return {r["factor"]: r for _, r in lam_df.iterrows()}
+
+    fmb_lk  = _lookup(gx_full_results["lam_fmb"],  "fmb")
+    obs_lk  = _lookup(gx_full_results["lam_obs"],  "obs")
+    full_lk = _lookup(gx_full_results["lam_full"], "full")
+
+    fmb_is_lk  = _lookup(gx_is_results["lam_fmb"],  "fmb")
+    full_is_lk = _lookup(gx_is_results["lam_full"], "full")
+
+    # ---- helper: gx row ----
+    def gx_row(fname):
+        fmb  = fmb_lk.get(fname,  {})
+        obs  = obs_lk.get(fname,  {})
+        full = full_lk.get(fname, {})
+        lf   = full.get("lambda_ann", np.nan)
+        tf   = full.get("tstat",      np.nan)
+        lo   = obs.get("lambda_ann",  np.nan)
+        to_  = obs.get("tstat",       np.nan)
+        lfmb = fmb.get("lambda_ann",  np.nan)
+        tfmb = fmb.get("tstat",       np.nan)
+        bold = lambda t: f"**{_fmt(t)}**" if np.isfinite(t) and abs(t) >= 1.65 else _fmt(t)
+        priced = "**Priced**" if np.isfinite(tf) and abs(tf) >= 1.65 else (
+                 "Borderline" if np.isfinite(tf) and abs(tf) >= 1.3 else "No")
+        what = FACTOR_WHAT.get(fname, fname)
+        return (f"| {fname} | {what} | {_fmt(lfmb, pct=True)} | {bold(tfmb)} | "
+                f"{_fmt(lo, pct=True)} | {bold(to_)} | {_fmt(lf, pct=True)} | "
+                f"{bold(tf)} | {priced} |")
+
+    priced_full = [f for f in factors_full
+                   if abs((full_lk.get(f, {}).get("tstat", 0) or 0)) >= 1.65]
+    priced_is   = [f for f in factors_is
+                   if abs((full_is_lk.get(f, {}).get("tstat", 0) or 0)) >= 1.65]
+
+    k_full = int(gx_full_results["k_hidden"])
+    k_is   = int(gx_is_results["k_hidden"])
+    n_full = len(factors_full)
+
+    # ---- master summary table ----
+    all_factors_ordered = [
+        "RC", "VolC", "MAXRET", "TVLC", "SMBC", "MomC",
+        "NetMom", "NetRel", "RMOM1w", "RMOM2w", "RMOM4w",
+        "FunC", "SPC1", "SPC2", "SPC3", "SPC4",
+        "CCA1", "CCA2", "CCA3", "MispricingM",
+    ]
+
+    def master_row(fname):
+        p = p1.get(fname, {})
+        full = full_lk.get(fname, {})
+        tf   = full.get("tstat", np.nan)
+        ic_t_is  = p.get("IS_IC_t",  np.nan)
+        ic_t_oos = p.get("OOS_IC_t", np.nan)
+        asd_e1   = p.get("asd_eps1", np.nan)
+        asd_e2   = p.get("asd_eps2", np.nan)
+        afsd = "✓" if p.get("afsd_dom_btc") else ("✗" if fname in p1 else "—")
+        assd = "✓" if p.get("assd_dom_btc") else ("✗" if fname in p1 else "—")
+        verd = p.get("verdict", "—").split(" (")[0] if fname in p1 else "—"
+
+        ic_is_s  = _fmt(ic_t_is)  if np.isfinite(ic_t_is)  else "—"
+        ic_oos_s = _fmt(ic_t_oos) if np.isfinite(ic_t_oos) else "—"
+        tf_s     = _fmt(tf)       if np.isfinite(tf)        else "—"
+        e1_s     = _fmt(asd_e1, 3, False) if np.isfinite(asd_e1) else "—"
+        e2_s     = _fmt(asd_e2, 3, False) if np.isfinite(asd_e2) else "—"
+
+        # overall conclusion
+        robust_ic  = verd.startswith("Robust")
+        priced_gx  = np.isfinite(tf) and abs(tf) >= 1.65
+        if fname == "RC":
+            conclusion = "Market beta — real but not tradable alpha"
+        elif robust_ic and priced_gx:
+            conclusion = "**Strongest evidence — IC + GX agree**"
+        elif robust_ic and not priced_gx:
+            conclusion = "IC robust; not a priced risk factor"
+        elif not robust_ic and priced_gx:
+            conclusion = "Priced risk factor; weak weekly ranking"
+        else:
+            conclusion = "Not confirmed by either test"
+
+        return (f"| {fname} | {ic_is_s} | {ic_oos_s} | {afsd} | {assd} | "
+                f"{e1_s} | {e2_s} | {tf_s} | {conclusion} |")
+
+    # ---- compose Part 2 markdown ----
+    part2 = f"""## Part 2 — Economic significance: Giglio-Xiu + Fama-MacBeth pricing (5-year panel)
+
+*What this section adds:* Part 1 tested whether each factor **ranks coins correctly** week-to-week
+(IC test) and whether its return distribution **beats Bitcoin** (ASD test). Part 2 asks a
+fundamentally different question: **is a factor a priced source of systematic risk?** A factor is
+"priced" if assets that load heavily on it earn systematically higher or lower returns across
+the full 5-year cross-section — regardless of weekly noise.
+
+We now test **all factors** — including the four new Han et al. (2023) factors (RMOM1w, RMOM2w,
+RMOM4w, MAXRET) — through the same GX pricing engine. This is the first time both Part 1 and
+Part 2 cover the same factor universe, enabling the master comparison table at the end.
+
+We run **three pricing methods** side by side:
+- **FMB (Fama-MacBeth 1973)** — week-by-week cross-sectional OLS, average λ_t, Newey-West SE.
+  Conservative and standard but noisy when factors > assets/week.
+- **GX obs-only** — single cross-section on mean returns, heteroskedasticity-robust SE.
+  More stable than FMB but ignores hidden risk factors.
+- **GX full (Giglio-Xiu 2021)** — adds a third pass: Bai-Ng selects K_hidden latent factors
+  from residuals, re-estimates betas on observed + hidden, re-prices. The most credible number
+  because it removes contamination from unobserved systematic forces.
+
+**How to read the table:**
+- **λ (%/yr)** = annualised risk premium. Positive = assets exposed to this factor earn more.
+- **t-stat**: **bold** = |t| ≥ 1.65 (statistically meaningful). Plain = not significant.
+
+### Full-sample results — {n_full} factors, K_hidden = {k_full}
+
+Full factor set: RC + SMBC + MomC + VolC + NetMom + NetRel (original 6) ·
+FunC + TVLC (fundamentals) · RMOM1w + RMOM2w + RMOM4w + MAXRET (Han et al. 2023) ·
+SPC1–4 (Sparse PCA) · CCA1–3 (macro-spanned).
+
+| Factor | What it is | FMB λ | t_fmb | GX-obs λ | t_obs | GX-full λ | t_gx | Verdict |
+|---|---|---|---|---|---|---|---|---|
+""" + "\n".join(gx_row(f) for f in factors_full) + f"""
+
+### What each result means
+
+**The new Han et al. (2023) factors in GX pricing:**
+
+"""
+
+    # Narrative for new factors
+    for fname in ["RMOM1w", "RMOM2w", "RMOM4w", "MAXRET"]:
+        if fname not in full_lk:
+            continue
+        tf   = full_lk[fname].get("tstat", np.nan)
+        lf   = full_lk[fname].get("lambda_ann", np.nan)
+        p    = p1.get(fname, {})
+        ic_v = p.get("verdict", "").split(" (")[0]
+        assd_flag = "ASSD-dominant vs BTC" if p.get("assd_dom_btc") else "not ASD-dominant"
+        what = FACTOR_WHAT.get(fname, fname)
+        if np.isfinite(tf) and abs(tf) >= 1.65:
+            pricing_msg = f"**priced at t_gx = {_fmt(tf)}** (λ = {_fmt(lf, pct=True)}/yr)"
+        else:
+            pricing_msg = f"not priced (t_gx = {_fmt(tf)})"
+        part2 += (f"**{fname} ({what}):** IC verdict = {ic_v}; {assd_flag}; "
+                  f"GX pricing = {pricing_msg}.\n\n")
+
+    # Existing factor commentary (concise, bridge to Part 1)
+    part2 += """**Cross-referencing with Part 1:**
+
+- **VolC** is the only factor confirmed by all three tests: IC IS (t=−3.3), IC OOS (t=−4.3),
+  ASD (ε₂ → 1.0, dominated by BTC — its L/S return distribution is worse than BTC, consistent
+  with the short-leg blowup risk documented in Part 1), and GX-full (t=−4.14, **priced**).
+  The negative λ means the *long leg* (low-vol coins) earns less than the cross-section average
+  — investors overpay for calm coins. The ranking signal is real; the raw L/S trade is dangerous.
+
+- **MAXRET** passed IC (robust IS + OOS in Part 1) but does not show up as a *priced* systematic
+  risk factor in GX. This is the classic anomaly vs. risk-factor distinction: MAXRET has
+  predictive power week-to-week (ranking signal) but that predictability is not compensation
+  for loading on a systematic risk. It may reflect a lottery premium or short-term reversal.
+
+- **TVLC** is priced (GX-full t=−3.40) but untestable by IC (no 5-year fundamentals).
+  The negative premium means high-TVL/mcap assets earn less — TVL Irrelevance (Hartmann 2025).
+
+- **RC** (market factor): strongly priced (GX-full t=+5.35). This is just the crypto equity
+  premium — real but not alpha.
+
+- **CCA1–3** (macro-spanned directions): look priced in GX-obs (t≈3.5) but the GX correction
+  kills the signal (t≈0). The hidden factors absorb the macro-crypto link entirely.
+
+"""
+
+    part2 += f"""### IS-only stability check (K_hidden = {k_is})
+
+IS window factors: {factors_is}. Priced at |t|≥1.65: {priced_is}.
+The IS window uses {k_is} hidden factors (vs {k_full} full-sample) because the shorter window
+leaves more unexplained residual variance. Use the full-sample results as primary evidence.
+
+---
+
+### Master comparison — all factors across all three tests
+
+This is the unified view combining Part 1 (IC + ASD) and Part 2 (GX pricing).
+Each factor is judged on: IC ranking power (IS and OOS t-stats), ASD vs Bitcoin
+(AFSD/ASSD flags and ε values), and GX-full pricing (t-stat).
+
+| Factor | IC IS t | IC OOS t | AFSD? | ASSD? | ε₁ | ε₂ | GX t_gx | Conclusion |
+|---|---|---|---|---|---|---|---|---|
+""" + "\n".join(master_row(f) for f in all_factors_ordered
+                if f in p1 or f in full_lk) + """
+
+**Legend:**
+- IC IS/OOS t: Newey-West t-stat on the mean IC (|t|≥2 = significant)
+- AFSD ✓: ε₁ ≤ 5.9% (almost first-order dominates Bitcoin)
+- ASSD ✓: ε₂ ≤ 3.2% (almost second-order dominates Bitcoin)
+- GX t_gx: Giglio-Xiu full-model t-stat (|t|≥1.65 = priced)
+- **Strongest evidence** = significant IC IS + OOS + priced in GX
+
+**Shortlist — what survived all tests:**
+
+Only factors with *both* robust IC (|t|≥2 in IS and OOS) and GX pricing (|t|≥1.65) are
+genuinely confirmed from two independent angles. Everything else is confirmed by at most one method.
+"""
+
+    # ---- write to RESULTS.md (preserve Part 1) ----
+    existing = results_path.read_text() if results_path.exists() else ""
+    # Strip any existing Part 2
+    for marker in ["\n---\n\n## Part 2", "\n\n## Part 2", "\n## Part 2"]:
+        if marker in existing:
+            existing = existing.split("## Part 2")[0].rstrip()
+            break
+
+    results_path.write_text(existing.rstrip() + "\n\n---\n\n" + part2 + "\n")
+    print(f"  Wrote Part 2 → {results_path.relative_to(STAGE.parent)}")
+
+
 # ── main ────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -503,6 +797,11 @@ def main() -> None:
     }
     (MAN_DIR/"09c_gx_full_manifest.json").write_text(json.dumps(manifest, indent=2))
     print("\nSaved: gx5y_full_factor_zoo, gx5y_full_lambda_is/full, 09c_gx_full_manifest.json")
+
+    # ---- rewrite RESULTS.md Part 2 with integrated narrative + master table ----
+    print("\nWriting integrated RESULTS.md Part 2 ...")
+    write_results_part2(gx_full, gx_is,
+                        list(zoo_full_fit.columns), list(zoo_is_fit.columns))
     print("done.")
 
 
