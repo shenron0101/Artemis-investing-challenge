@@ -1,0 +1,114 @@
+symbol,coin_name,cohort,binance_pair,years_history,pct_missing,panel_weeks,panel_first_week,mcap_tier,cm_mcap_available,has_5y
+ETH,Ethereum,large_cap,ETHUSDT,8.78,0.0,459.0,2017-08-14,1_real_mcap,True,True
+BTC,Bitcoin,large_cap,BTCUSDT,8.78,0.0,459.0,2017-08-14,1_real_mcap,True,True
+BNB,BNB,large_cap,BNBUSDT,8.56,0.0,447.0,2017-11-06,1_real_mcap,True,True
+LTC,Litecoin,mid_cap_strict,LTCUSDT,8.46,0.0,442.0,2017-12-11,1_real_mcap,True,True
+ADA,Cardano,mid_cap_strict,ADAUSDT,8.11,0.0,424.0,2018-04-16,1_real_mcap,True,True
+XRP,XRP,large_cap,XRPUSDT,8.07,0.0,422.0,2018-04-30,1_real_mcap,True,True
+TUSD,TrueUSD,below_large_top100_ext,TUSDUSDT,7.99,0.0565,,,3_price_x_anchor,False,False
+XLM,Stellar,mid_cap_strict,XLMUSDT,7.99,0.0,418.0,2018-05-28,1_real_mcap,True,True
+TRX,TRON,large_cap,TRXUSDT,7.96,0.0,416.0,2018-06-11,3_price_x_anchor,False,True
+ETC,Ethereum Classic,mid_cap_strict,ETCUSDT,7.96,0.0,416.0,2018-06-11,1_real_mcap,True,True
+VET,VeChain,below_large_top100_ext,VETUSDT,7.84,0.0,410.0,2018-07-23,3_price_x_anchor,False,True
+USDC,USDC,large_cap,USDCUSDT,7.45,0.0606,,,3_price_x_anchor,False,False
+LINK,Chainlink,mid_cap_strict,LINKUSDT,7.36,0.0,385.0,2019-01-14,1_real_mcap,True,True
+FET,Artificial Superintelligence Alliance,below_large_top100_ext,FETUSDT,7.25,0.0,379.0,2019-02-25,3_price_x_anchor,False,True
+ZEC,Zcash,mid_cap_strict,ZECUSDT,7.19,0.0,376.0,2019-03-18,1_real_mcap,True,True
+DASH,Dash,below_large_top100_ext,DASHUSDT,7.17,0.0,375.0,2019-03-25,1_real_mcap,True,True
+ATOM,Cosmos Hub,below_large_top100_ext,ATOMUSDT,7.08,0.0,370.0,2019-04-29,3_price_x_anchor,False,True
+ALGO,Algorand,mid_cap_strict,ALGOUSDT,6.93,0.0,363.0,2019-06-17,1_real_mcap,True,True
+DOGE,Dogecoin,large_cap,DOGEUSDT,6.9,0.0,361.0,2019-07-01,1_real_mcap,True,True
+CHZ,Chiliz,below_large_top100_ext,CHZUSDT,6.73,0.0,352.0,2019-09-02,3_price_x_anchor,False,True
+HBAR,Hedera,mid_cap_strict,HBARUSDT,6.66,0.0,349.0,2019-09-23,3_price_x_anchor,False,True
+STX,Stacks,below_large_top100_ext,STXUSDT,6.59,0.0,345.0,2019-10-21,3_price_x_anchor,False,True
+BCH,Bitcoin Cash,mid_cap_strict,BCHUSDT,6.5,0.0,340.0,2019-11-25,1_real_mcap,True,True
+SOL,Solana,large_cap,SOLUSDT,5.8,0.0,303.0,2020-08-10,3_price_x_anchor,False,True
+JST,JUST,below_large_top100_ext,JSTUSDT,5.8,0.0,303.0,2020-08-10,3_price_x_anchor,False,True
+DOT,Polkadot,mid_cap_strict,DOTUSDT,5.78,0.0,302.0,2020-08-17,1_real_mcap,True,True
+PAXG,PAX Gold,mid_cap_strict,PAXGUSDT,5.75,0.0,301.0,2020-08-24,1_real_mcap,True,True
+UNI,Uniswap,mid_cap_strict,UNIUSDT,5.69,0.0,298.0,2020-09-14,1_real_mcap,True,True
+AVAX,Avalanche,mid_cap_strict,AVAXUSDT,5.68,0.0,297.0,2020-09-21,3_price_x_anchor,False,True
+NEAR,NEAR Protocol,mid_cap_strict,NEARUSDT,5.62,0.0,294.0,2020-10-12,3_price_x_anchor,False,True
+FIL,Filecoin,below_large_top100_ext,FILUSDT,5.62,0.0,294.0,2020-10-12,3_price_x_anchor,False,True
+AAVE,Aave,mid_cap_strict,AAVEUSDT,5.62,0.0,294.0,2020-10-12,1_real_mcap,True,True
+CAKE,PancakeSwap,below_large_top100_ext,CAKEUSDT,5.27,0.0,276.0,2021-02-15,3_price_x_anchor,False,True
+ICP,Internet Computer,mid_cap_strict,ICPUSDT,5.05,0.0,264.0,2021-05-10,1_real_mcap,True,True
+SHIB,Shiba Inu,mid_cap_strict,SHIBUSDT,5.05,0.0,264.0,2021-05-10,3_price_x_anchor,False,True
+DEXE,DeXe,below_large_top100_ext,DEXEUSDT,4.85,0.0,254.0,2021-07-19,3_price_x_anchor,False,False
+QNT,Quant,mid_cap_strict,QNTUSDT,4.83,0.0,253.0,2021-07-26,1_real_mcap,True,False
+NEXO,NEXO,below_large_top100_ext,NEXOUSDT,4.08,0.0,214.0,2022-04-25,3_price_x_anchor,False,False
+LUNC,Terra Luna Classic,below_large_top100_ext,LUNCUSDT,3.72,0.0,195.0,2022-09-05,3_price_x_anchor,False,False
+APT,Aptos,below_large_top100_ext,APTUSDT,3.61,0.0,189.0,2022-10-17,3_price_x_anchor,False,False
+ARB,Arbitrum,below_large_top100_ext,ARBUSDT,3.18,0.0,167.0,2023-03-20,3_price_x_anchor,False,False
+SUI,Sui,mid_cap_strict,SUIUSDT,3.07,0.0,161.0,2023-05-01,3_price_x_anchor,False,False
+PEPE,Pepe,mid_cap_strict,PEPEUSDT,3.07,0.0,161.0,2023-05-01,3_price_x_anchor,False,False
+WLD,Worldcoin,below_large_top100_ext,WLDUSDT,2.85,0.0,149.0,2023-07-24,3_price_x_anchor,False,False
+BONK,Bonk,below_large_top100_ext,BONKUSDT,2.45,0.0,129.0,2023-12-11,3_price_x_anchor,False,False
+JUP,Jupiter,below_large_top100_ext,JUPUSDT,2.32,0.0,122.0,2024-01-29,3_price_x_anchor,False,False
+ENA,Ethena,mid_cap_strict,ENAUSDT,2.15,0.0,113.0,2024-04-01,3_price_x_anchor,False,False
+TAO,Bittensor,mid_cap_strict,TAOUSDT,2.13,0.0,112.0,2024-04-08,3_price_x_anchor,False,False
+RENDER,Render,mid_cap_strict,RENDERUSDT,1.84,0.0,97.0,2024-07-22,3_price_x_anchor,False,False
+TON,Toncoin,mid_cap_strict,TONUSDT,1.8,0.0,95.0,2024-08-05,3_price_x_anchor,False,False
+POL,POL \(ex-MATIC\),mid_cap_strict,POLUSDT,1.71,0.0,90.0,2024-09-09,3_price_x_anchor,False,False
+PENGU,Pudgy Penguins,below_large_top100_ext,PENGUUSDT,1.45,0.0,76.0,2024-12-16,3_price_x_anchor,False,False
+TRUMP,Official Trump,below_large_top100_ext,TRUMPUSDT,1.36,0.0,72.0,2025-01-13,3_price_x_anchor,False,False
+ONDO,Ondo,mid_cap_strict,ONDOUSDT,1.13,0.0,60.0,2025-04-07,3_price_x_anchor,False,False
+VIRTUAL,Virtuals Protocol,below_large_top100_ext,VIRTUALUSDT,1.13,0.0,60.0,2025-04-07,3_price_x_anchor,False,False
+USD1,USD1,mid_cap_strict,USD1USDT,1.02,0.0,,,3_price_x_anchor,False,False
+BFUSD,BFUSD,mid_cap_strict,BFUSDUSDT,0.79,0.0,42.0,2025-08-11,3_price_x_anchor,False,False
+WLFI,World Liberty Financial,mid_cap_strict,WLFIUSDT,0.74,0.0,39.0,2025-09-01,3_price_x_anchor,False,False
+USDE,Ethena USDe,mid_cap_strict,USDEUSDT,0.72,0.0,,,3_price_x_anchor,False,False
+PUMP,Pump.fun,below_large_top100_ext,PUMPUSDT,0.71,0.0,38.0,2025-09-08,3_price_x_anchor,False,False
+SKY,Sky,mid_cap_strict,SKYUSDT,0.7,0.0,37.0,2025-09-15,3_price_x_anchor,False,False
+MORPHO,Morpho,mid_cap_strict,MORPHOUSDT,0.65,0.0,35.0,2025-09-29,3_price_x_anchor,False,False
+ASTER,Aster,mid_cap_strict,ASTERUSDT,0.64,0.0,34.0,2025-10-06,3_price_x_anchor,False,False
+U,United Stables,mid_cap_strict,UUSDT,0.37,0.0,20.0,2026-01-12,3_price_x_anchor,False,False
+RLUSD,Ripple USD,mid_cap_strict,RLUSDUSDT,0.35,0.0,19.0,2026-01-19,3_price_x_anchor,False,False
+NIGHT,Midnight,below_large_top100_ext,NIGHTUSDT,0.22,0.0,12.0,2026-03-09,3_price_x_anchor,False,False
+XAUT,Tether Gold,mid_cap_strict,XAUTUSDT,0.18,0.0,10.0,2026-03-23,1_real_mcap,True,False
+USDS,USDS,large_cap,USDSUSDT,0.14,0.0,,,3_price_x_anchor,False,False
+USDT,Tether,large_cap,,,,,,none,False,False
+FIGR_HELOC,Figure Heloc,large_cap,,,,,,none,False,False
+WBT,WhiteBIT Coin,large_cap,,,,,,none,False,False
+HYPE,Hyperliquid,large_cap,,,,,,none,False,False
+LEO,LEO Token,mid_cap_strict,,,,,,none,False,False
+XMR,Monero,mid_cap_strict,,,,,,none,True,False
+CC,Canton,mid_cap_strict,,,,,,none,False,False
+M,MemeCore,mid_cap_strict,,,,,,none,False,False
+DAI,Dai,mid_cap_strict,,,,,,none,False,False
+RAIN,Rain,mid_cap_strict,,,,,,none,False,False
+PYUSD,PayPal USD,mid_cap_strict,,,,,,none,False,False
+CRO,Cronos,mid_cap_strict,,,,,,none,True,False
+USYC,Circle USYC,mid_cap_strict,,,,,,none,False,False
+USDG,Global Dollar,mid_cap_strict,,,,,,none,False,False
+BUIDL,BlackRock USD Institutional Digital Liquidity Fund,mid_cap_strict,,,,,,none,False,False
+MNT,Mantle,mid_cap_strict,,,,,,none,False,False
+HTX,HTX DAO,mid_cap_strict,,,,,,none,False,False
+OKB,OKB,mid_cap_strict,,,,,,none,False,False
+USDF,Falcon USD,mid_cap_strict,,,,,,none,False,False
+PI,Pi Network,mid_cap_strict,,,,,,none,False,False
+BGB,Bitget Token,mid_cap_strict,,,,,,none,False,False
+USDD,USDD,mid_cap_strict,,,,,,none,False,False
+USDY,Ondo US Dollar Yield,mid_cap_strict,,,,,,none,False,False
+JTRSY,Janus Henderson Anemoy Treasury Fund,mid_cap_strict,,,,,,none,False,False
+KCS,KuCoin,mid_cap_strict,,,,,,none,False,False
+EUTBL,Spiko EU T-Bills Money Market Fund,below_large_top100_ext,,,,,,none,False,False
+KAS,Kaspa,below_large_top100_ext,,,,,,none,False,False
+BCAP,Blockchain Capital,below_large_top100_ext,,,,,,none,False,False
+USTB,Superstate Short Duration U.S. Government Securities Fund \(USTB\),below_large_top100_ext,,,,,,none,False,False
+GT,Gate,below_large_top100_ext,,,,,,none,False,False
+SIREN,Siren,below_large_top100_ext,,,,,,none,False,False
+STABLE,Stable,below_large_top100_ext,,,,,,none,False,False
+FLR,Flare,below_large_top100_ext,,,,,,none,False,False
+USDTB,USDtb,below_large_top100_ext,,,,,,none,False,False
+VVV,Venice Token,below_large_top100_ext,,,,,,none,False,False
+BDX,Beldex,below_large_top100_ext,,,,,,none,False,False
+OUSG,OUSG,below_large_top100_ext,,,,,,none,False,False
+SKYAI,SkyAI,below_large_top100_ext,,,,,,none,False,False
+XDC,XDC Network,below_large_top100_ext,,,,,,none,False,False
+GHO,GHO,below_large_top100_ext,,,,,,none,False,False
+USD0,Usual USD,below_large_top100_ext,,,,,,none,False,False
+HASH,Provenance Blockchain,below_large_top100_ext,,,,,,none,False,False
+YLDS,YLDS,below_large_top100_ext,,,,,,none,False,False
+A7A5,A7A5,below_large_top100_ext,,,,,,none,False,False
+USDM,MegaUSD,below_large_top100_ext,,,,,,none,False,False
