@@ -1,0 +1,16 @@
+{
+  "regime_counts": {
+    "Neutral": 459
+  },
+  "obs_cols": [
+    "csd_z",
+    "dbtc_z",
+    "netent_z",
+    "mktmom_z"
+  ],
+  "n_states": 3,
+  "min_train": 52,
+  "refit_every": 4,
+  "final_transition_matrix": null,
+  "weeks": 459
+}
