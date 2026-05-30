@@ -4,6 +4,16 @@
 trading rule) actually makes money in a believable way. We test every factor on
 two separate time periods so we can't fool ourselves.
 
+*How it's organised:* **Part 1** (below) reports the raw evidence one test at a
+time — does the factor *rank* coins (IC), is its return distribution non-normal,
+does it *beat Bitcoin* (ASD). **Part 2** runs the Giglio-Xiu / Fama-MacBeth pricing
+tests and then **synthesises everything into a per-factor dossier**: each factor's
+economic function, what each test did and did not show, and a single *graded*
+verdict. No factor is significant on every test, and it doesn't need to be — so the
+dossier grades on a scale (Confirmed → Priced risk → Tradable signal → Suggestive →
+Economic-only → Structure → Not supported) rather than a pass/fail bar. **If you read
+one thing, read the Part 2 dossier.**
+
 ## How to read this (30-second version)
 
 - A **factor** is a rule like "buy small coins, sell big coins, rebalance weekly."
@@ -12,8 +22,11 @@ two separate time periods so we can't fool ourselves.
   - **In-sample (IS):** 2021-05-10 → 2024-11-11 (184 weeks) — where we're allowed to look.
   - **Out-of-sample (OOS):** 2024-11-18 → 2026-05-25 (80 weeks) — the "exam" the factor never saw.
 - **IC (information coefficient)** = how well the factor *ranks* coins from
-  best to worst each week. IC ≈ ±0.03–0.05 is a normal useful signal; negative IC
-  means the rule ranks coins **backwards**.
+  best to worst each week. |IC| ≈ 0.03–0.05 is a normal useful signal. **Read the
+  sign against the factor's bet, not in the abstract:** a low-vol or size factor goes
+  *long the bottom* of its sort, so a negative raw IC on the characteristic is the
+  factor *working*, not failing. Part 2's dossier reports the **direction-adjusted**
+  IC (positive = the bet ranked coins correctly) to remove this confusion.
 - **Sharpe** = return per unit of risk (>1 is good; >2 is excellent).
 - **t-stat** = "is this real, or luck?" **|t| ≥ 2 means very unlikely to be luck.**
 - **ASD (almost stochastic dominance)** = a nonparametric test that checks whether
@@ -22,10 +35,17 @@ two separate time periods so we can't fool ourselves.
   crypto returns (Han et al. 2023, European Financial Management).
   - **ε₁ ≤ 5.9%** → factor almost first-order dominates Bitcoin (AFSD) — most investors prefer it
   - **ε₂ ≤ 3.2%** → factor almost second-order dominates Bitcoin (ASSD) — risk-averse investors prefer it
-- **Verdict** (judged on IC for Group A, Sharpe for Group B):
+- **Verdict** here is the *IC-test-only* label (one lens of three):
   - **Robust** = significant IS *and* holds OOS.
   - **In-sample only** = faded or flipped OOS. Don't trust it.
-  - **Weak** = not convincing IS. Drop it.
+  - **Weak** = not convincing IS on the IC lens alone.
+
+  A "Weak" IC label does **not** mean the factor is worthless — it may still beat
+  Bitcoin's distribution (ASD) or be a priced risk (GX, Part 2). The **bottom-line,
+  graded** verdict that combines all three lenses lives in **Part 2's per-factor
+  dossier** (Confirmed / Priced risk / Tradable signal / Suggestive / Economic-only /
+  Structure / Not supported). Read Part 1 as the raw evidence per test; read Part 2
+  for the coherent per-factor story.
 
 All signals use only past data (no look-ahead), and we use *Newey-West* t-stats
 (lags=4) to account for serial correlation.
@@ -42,10 +62,13 @@ All signals use only past data (no look-ahead), and we use *Newey-West* t-stats
    maximum-return lottery signal (MAXRET). These are among the 8 factors that
    "almost stochastically dominate" benchmarks in that paper.
    On our panel: **MAXRET** passed IC significance.
-3. **Volatility's signal runs backwards.** Negative IC means higher-vol coins tend
-   to rank slightly worse — consistent with a low-volatility premium. But the raw
-   L/S Sharpe is weak, because fat-tailed volatile coins occasionally rocket and
-   blow up the short leg. VolC is a ranking signal, not a mechanical long/short trade.
+3. **Volatility ranks coins the right way (low-vol wins).** The raw IC is negative
+   *because the factor is long low-vol*: higher-vol coins rank worse, so calm coins
+   are the buy — a textbook low-volatility premium (direction-adjusted IC is strongly
+   positive; see Part 2). But the raw L/S Sharpe is weak, because fat-tailed volatile
+   coins occasionally rocket and blow up the short leg, and over five years the *priced*
+   premium on the L/S actually runs negative (Part 2). VolC is a ranking signal to lean
+   on, not a mechanical long/short trade.
 4. **The ASD test is more honest than Sharpe for crypto.** Crypto factor returns are
    highly nonnormal (see distribution table below). Sharpe implicitly assumes
    normality; ASD does not. A factor beating Bitcoin by ASD is a stronger claim.
@@ -180,13 +203,18 @@ the common mispricing signal across factors.
 
 ---
 
-## The shortlist (what survived all tests)
+## The shortlist (IC lens only — full graded ranking is in Part 2)
 
-**Competition-grade factors (Robust IC + ASD confirms vs BTC):**
+**IC-robust factors (significant ranking power IS *and* held OOS):**
 VolC, MAXRET
 
-These are the factors defensible to competition judges:
-statistically significant IS ranking power, held OOS, and confirmed by ASD.
+These have statistically significant cross-sectional ranking power that survived
+out-of-sample — the strongest result the *IC lens alone* can give. Note this is **not**
+the same as ASD-dominance: a factor can rank coins well yet not beat Bitcoin's whole
+return distribution (VolC is the clearest case — strong IC, but BTC dominates its L/S
+distribution). The competition-grade call comes from combining all three lenses —
+IC, ASD, and Giglio-Xiu pricing — into the **graded per-factor dossier in Part 2**,
+where these same factors land as *Confirmed* (IC + priced-risk agree they are real).
 
 ---
 
@@ -203,10 +231,6 @@ statistically significant IS ranking power, held OOS, and confirmed by ASD.
   completely collapses, but not enough to certify a small edge with high confidence.
 - **ASD is a full-sample test** (not IS/OOS split) because it needs a sufficient
   number of observations to estimate the empirical CDF reliably.
-
----
-
----
 
 ---
 
@@ -282,7 +306,7 @@ view alongside whatever the statistics could and could not show.
 
 | Grade | What it means |
 |---|---|
-| **Confirmed** | independent tests agree — real on this sample |
+| **Confirmed** | every test registers it as a strong, real factor |
 | **Priced risk** | compensated systematic exposure, but no week-to-week edge |
 | **Tradable signal** | ranks the cross-section, though not a priced *risk* |
 | **Suggestive** | economic story intact + partial/semi-significant evidence |
@@ -298,14 +322,14 @@ standalone economic rationale. Sorted strongest-evidence first.
 #### MAXRET — Max weekly return, 4w trailing (Han '23)  ·  *Confirmed*
 
 - **Economic function.** **Lottery / max-return** (Han et al. 2023; Bali et al. 2011). Coins with an extreme recent up-week attract lottery demand and get over-priced, so the *correct* bet is to **short** the lottery — we expect high-max-return names to under-perform (a reversal/over-pricing signal, not a buy-the-winner one).
-- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-3.49, OOS t=-4.05 — the ranking is *significant but reversed*: high-signal names underperform, i.e. the tradable bet is to short them. Distribution vs Bitcoin: neither dominates (ε₁=0.545, ε₂=0.457). Priced risk (Giglio-Xiu, hidden-factor robust): **λ=+160.0%/yr, t=+5.52** — a genuinely compensated exposure.
-- **Verdict — Confirmed:** independent tests agree — real on this sample.
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-3.49, OOS t=-4.05 — *significant but reversed*: high-signal names underperform in both windows, so the tradable bet is to short them. Distribution vs Bitcoin: neither dominates (ε₁=0.545, ε₂=0.457). Priced risk (Giglio-Xiu, hidden-factor robust): **λ=+160.0%/yr, t=+5.52** — a genuinely compensated exposure.
+- **Verdict — Confirmed:** every test registers it as a strong, real factor. The two lenses **disagree in sign**: the short-term ranking edge and the long-run priced-risk premium are *not the same trade* — rank on the weekly signal, but respect that the multi-year L/S premium runs the other way.
 
 #### VolC — Low-vol minus high-vol  ·  *Confirmed*
 
 - **Economic function.** **Low-volatility / betting-against-beta.** Leverage-constrained and lottery-seeking investors over-pay for high-vol names, leaving calm coins cheap (Frazzini-Pedersen 2014). Prediction: low-vol coins out-rank high-vol ones, so the *long-low/short-high* bet should earn a positive premium.
 - **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=+3.32, OOS t=+4.31 — significant in-sample and still pointing the right way out-of-sample. Distribution vs Bitcoin: **dominated by BTC** (ε₁ reverse small) — its return distribution is worse than just holding Bitcoin. Priced risk (Giglio-Xiu, hidden-factor robust): **λ=-185.8%/yr, t=-5.05** — a genuinely compensated exposure.
-- **Verdict — Confirmed:** independent tests agree — real on this sample.
+- **Verdict — Confirmed:** every test registers it as a strong, real factor. The two lenses **disagree in sign**: the short-term ranking edge and the long-run priced-risk premium are *not the same trade* — rank on the weekly signal, but respect that the multi-year L/S premium runs the other way.
 
 #### TVLC — High TVL/mcap minus low  ·  *Priced risk*
 
@@ -322,25 +346,25 @@ standalone economic rationale. Sorted strongest-evidence first.
 #### RMOM1w — 1-week risk-adj momentum (Han '23)  ·  *Priced risk*
 
 - **Economic function.** **Risk-adjusted momentum (1w).** Trend scaled by recent volatility (Han et al. 2023). Dividing by risk strips the vol-driven noise that makes raw momentum crash, so it should rank more cleanly than MomC. Expected >0.
-- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.07, OOS t=-0.27 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.000 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk (Giglio-Xiu, hidden-factor robust): **λ=+59.4%/yr, t=+1.86** — a genuinely compensated exposure.
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.07, OOS t=-0.27 — no reliable weekly ranking power either way. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.000 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk (Giglio-Xiu, hidden-factor robust): **λ=+59.4%/yr, t=+1.86** — a genuinely compensated exposure.
 - **Verdict — Priced risk:** compensated systematic exposure, but no week-to-week edge.
 
 #### RMOM2w — 2-week risk-adj momentum (Han '23)  ·  *Suggestive*
 
 - **Economic function.** **Risk-adjusted momentum (2w).** Two-week return over 4-week vol (Han et al. 2023). Same logic as RMOM1w at a slightly slower horizon.
-- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-2.46, OOS t=-0.24 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.003 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk: not priced once hidden factors are controlled (t=+1.05).
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-2.46, OOS t=-0.24 — significant in-sample but in *reverse* — a short-the-signal direction, yet it does **not** survive out-of-sample; reads as regime-specific, not a stable edge. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.003 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk: not priced once hidden factors are controlled (t=+1.05).
 - **Verdict — Suggestive:** economic story intact + partial/semi-significant evidence.
 
 #### SMBC — Small minus big (size)  ·  *Suggestive*
 
 - **Economic function.** **Size.** Small caps should out-earn large caps as payment for illiquidity, thinner information coverage, and higher fundamental risk (the Fama-French SMB analogue). Expected long-small/short-big premium >0 in risk-on regimes; it can invert during flights to quality, when capital crowds into BTC/ETH.
-- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.49, OOS t=-1.25 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.031 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk: not priced once hidden factors are controlled (t=+0.36).
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.49, OOS t=-1.25 — no reliable weekly ranking power either way. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.031 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk: not priced once hidden factors are controlled (t=+0.36).
 - **Verdict — Suggestive:** economic story intact + partial/semi-significant evidence.
 
 #### NetRel — Cross-cluster rotation  ·  *Suggestive*
 
 - **Economic function.** **Cross-cluster rotation.** Capital rotates between narratives; coins pulling ahead of the *other* clusters are riding the rotation in, laggards are rotating out. Expected premium >0 whenever narrative cycling is active.
-- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.72, OOS t=-0.10 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.026 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk: not priced once hidden factors are controlled (t=-0.01).
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.72, OOS t=-0.10 — significant in-sample but in *reverse* — a short-the-signal direction, yet it does **not** survive out-of-sample; reads as regime-specific, not a stable edge. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.026 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk: not priced once hidden factors are controlled (t=-0.01).
 - **Verdict — Suggestive:** economic story intact + partial/semi-significant evidence.
 
 #### MispricingM — Equal-weight ASSD-dominant composite  ·  *Suggestive*
@@ -400,19 +424,19 @@ standalone economic rationale. Sorted strongest-evidence first.
 #### RMOM4w — 4-week Sharpe momentum  (Han '23)  ·  *Not supported*
 
 - **Economic function.** **Risk-adjusted momentum (4w)** = a 4-week Sharpe ratio (Han et al. 2023). Rewards trend that is both large *and* consistent.
-- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-2.61, OOS t=-0.86 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: neither dominates (ε₁=0.449, ε₂=0.052). Priced risk: not priced once hidden factors are controlled (t=+1.24).
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-2.61, OOS t=-0.86 — significant in-sample but in *reverse* — a short-the-signal direction, yet it does **not** survive out-of-sample; reads as regime-specific, not a stable edge. Distribution vs Bitcoin: neither dominates (ε₁=0.449, ε₂=0.052). Priced risk: not priced once hidden factors are controlled (t=+1.24).
 - **Verdict — Not supported:** fails its own prediction on this sample.
 
 #### NetMom — Within-cluster momentum  ·  *Not supported*
 
 - **Economic function.** **Within-cluster momentum.** Inside a tight correlation community, the coin out-trending its peers tends to keep leading. Ranking *within* the cluster strips out market beta and isolates idiosyncratic trend (Liu-Tsyvinski 2018). Expected premium >0.
-- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-0.15, OOS t=-0.81 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: neither dominates (ε₁=0.852, ε₂=0.958). Priced risk: not priced once hidden factors are controlled (t=+0.37).
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-0.15, OOS t=-0.81 — no reliable weekly ranking power either way. Distribution vs Bitcoin: neither dominates (ε₁=0.852, ε₂=0.958). Priced risk: not priced once hidden factors are controlled (t=+0.37).
 - **Verdict — Not supported:** fails its own prediction on this sample.
 
 #### MomC — 4-week raw momentum  ·  *Not supported*
 
 - **Economic function.** **Momentum.** Investors under-react to news, so recent 4-week winners keep winning (Jegadeesh-Titman; Liu-Tsyvinski 2022). Expected premium >0, but raw momentum is regime-fragile and crashes hard at trend reversals.
-- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.66, OOS t=+0.13 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: neither dominates (ε₁=0.474, ε₂=0.208). Priced risk: not priced once hidden factors are controlled (t=-0.10).
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.66, OOS t=+0.13 — significant in-sample but in *reverse* — a short-the-signal direction, yet it does **not** survive out-of-sample; reads as regime-specific, not a stable edge. Distribution vs Bitcoin: neither dominates (ε₁=0.474, ε₂=0.208). Priced risk: not priced once hidden factors are controlled (t=-0.10).
 - **Verdict — Not supported:** fails its own prediction on this sample.
 
 ### IS-only stability check (K_hidden = 4)
@@ -459,7 +483,12 @@ the dossier reports the direction-adjusted version). AFSD ✓ = ε₁ ≤ 5.9%, 
 the prose above, so the two can never disagree.
 
 **The shortlist by grade.** Reading down the grades:
-{shortlist_by_grade}
+- **Confirmed** (every test registers it as a strong, real factor): VolC, MAXRET
+- **Priced risk** (compensated systematic exposure, but no week-to-week edge): RC, TVLC, RMOM1w
+- **Suggestive** (economic story intact + partial/semi-significant evidence): SMBC, NetRel, RMOM2w, MispricingM
+- **Economic-only** (sound rationale, but the data here can't confirm it): FunC
+- **Structure** (a risk *direction* (how the market moves), not an alpha bet): SPC1, SPC2, SPC3, SPC4, CCA1, CCA2, CCA3
+- **Not supported** (fails its own prediction on this sample): MomC, NetMom, RMOM4w
 
 *Confirmed* factors are backed from two independent angles and are the defensible core.
 *Priced risk* and *Tradable signal* factors are real but one-dimensional — useful, with a

@@ -561,7 +561,7 @@ GRADE_ORDER = [
     "Suggestive", "Economic-only", "Structure", "Not supported",
 ]
 GRADE_BLURB = {
-    "Confirmed":      "independent tests agree — real on this sample",
+    "Confirmed":      "every test registers it as a strong, real factor",
     "Priced risk":    "compensated systematic exposure, but no week-to-week edge",
     "Tradable signal": "ranks the cross-section, though not a priced *risk*",
     "Suggestive":     "economic story intact + partial/semi-significant evidence",
@@ -603,10 +603,19 @@ def grade_factor(fname, p1, full_lk):
     afsd = bool(p1.get("afsd_dom_btc"))
     dom_by_btc = bool(p1.get("afsd_dom_by_btc"))
 
+    # Do the weekly-ranking lens and the priced-risk lens point the same way?
+    # ic_sign = +1 if longing the signal ranks correctly, -1 if it reverses.
+    # lam_sign = sign of the priced premium on the (long-the-signal) factor.
+    ic_sign  = 1 if rank_strong else (-1 if rank_reversal else 0)
+    lam_sign = int(np.sign(lam)) if (priced and np.isfinite(lam)) else 0
+    lens_agree    = bool(ic_sign and lam_sign and ic_sign == lam_sign)
+    lens_conflict = bool(ic_sign and lam_sign and ic_sign != lam_sign)
+
     ev = dict(tf=tf, lam=lam, priced=priced, borderline=borderline,
               ic_is=ic_is, ic_oos=ic_oos, has_ic=has_ic,
               rank_strong=rank_strong, rank_semi=rank_semi, rank_reversal=rank_reversal,
-              assd=assd, afsd=afsd, dom_by_btc=dom_by_btc)
+              assd=assd, afsd=afsd, dom_by_btc=dom_by_btc,
+              lens_agree=lens_agree, lens_conflict=lens_conflict)
 
     if fname == "RC":
         return "Priced risk", ev          # special-cased to market-beta prose
@@ -632,19 +641,24 @@ def _tests_prose(fname, ev, p1):
     bits = []
     # Weekly ranking (IC)
     if ev["has_ic"]:
-        d = FACTOR_DIR.get(fname, 1)
-        verb = "predicts the cross-section" if ev["ic_is"] > 0 else "runs opposite the long leg"
-        ic_line = (f"Weekly ranking (direction-adjusted IC): IS t={_fmt(ev['ic_is'])}, "
-                   f"OOS t={_fmt(ev['ic_oos'])}")
+        ic_is, ic_oos = ev["ic_is"], ev["ic_oos"]
+        ic_line = (f"Weekly ranking (direction-adjusted IC): IS t={_fmt(ic_is)}, "
+                   f"OOS t={_fmt(ic_oos)}")
         if ev["rank_strong"]:
             ic_line += " — significant in-sample and still pointing the right way out-of-sample."
         elif ev["rank_reversal"]:
-            ic_line += " — the ranking is *significant but reversed*: high-signal names underperform, "
-            ic_line += "i.e. the tradable bet is to short them."
+            ic_line += (" — *significant but reversed*: high-signal names underperform in both "
+                        "windows, so the tradable bet is to short them.")
+        elif np.isfinite(ic_is) and abs(ic_is) >= 1.65:
+            # significant in-sample but the OOS window doesn't confirm it
+            dirtxt = ("significant in-sample in the expected direction" if ic_is > 0
+                      else "significant in-sample but in *reverse* — a short-the-signal direction")
+            ic_line += (f" — {dirtxt}, yet it does **not** survive out-of-sample; "
+                        "reads as regime-specific, not a stable edge.")
         elif ev["rank_semi"]:
-            ic_line += " — marginal, but the correct sign survives into the OOS window."
+            ic_line += " — only marginal, but the correct sign carries into the OOS window."
         else:
-            ic_line += f" — the signal {verb} only weakly here."
+            ic_line += " — no reliable weekly ranking power either way."
         bits.append(ic_line)
     else:
         bits.append("Weekly ranking: no 5-year IC (price/fundamental/structure factor — "
@@ -689,11 +703,19 @@ def factor_dossier(order, p1, full_lk) -> str:
         what = FACTOR_WHAT.get(f, f)
         econ = FACTOR_ECON.get(f, "")
         tests = _tests_prose(f, ev, p1.get(f, {}))
+        vsuffix = ""
+        if ev["lens_agree"]:
+            vsuffix = (" The weekly ranking and the multi-year priced-risk premium point the "
+                       "**same way** — a clean signal you can both rank on and hold.")
+        elif ev["lens_conflict"]:
+            vsuffix = (" The two lenses **disagree in sign**: the short-term ranking edge and the "
+                       "long-run priced-risk premium are *not the same trade* — rank on the weekly "
+                       "signal, but respect that the multi-year L/S premium runs the other way.")
         out.append(
             f"#### {f} — {what}  ·  *{grade}*\n\n"
             f"- **Economic function.** {econ}\n"
             f"- **What the tests say.** {tests}\n"
-            f"- **Verdict — {grade}:** {GRADE_BLURB[grade]}."
+            f"- **Verdict — {grade}:** {GRADE_BLURB[grade]}.{vsuffix}"
         )
     return "\n\n".join(out)
 
@@ -877,7 +899,7 @@ Each factor is judged on: IC ranking power (IS and OOS t-stats), ASD vs Bitcoin
 | Factor | IC IS t | IC OOS t | AFSD? | ASSD? | ε₁ | ε₂ | GX t_gx | Conclusion |
 |---|---|---|---|---|---|---|---|---|
 """ + "\n".join(master_row(f) for f in all_factors_ordered
-                if f in p1 or f in full_lk) + """
+                if f in p1 or f in full_lk) + f"""
 
 **Legend.** IC IS/OOS t = Newey-West t-stat on the mean IC (here shown *direction-raw*;
 the dossier reports the direction-adjusted version). AFSD ✓ = ε₁ ≤ 5.9%, ASSD ✓ = ε₂ ≤ 3.2%

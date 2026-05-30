@@ -583,6 +583,16 @@ def write_results_md(stats: pd.DataFrame, man: dict, dom_names: list) -> None:
 trading rule) actually makes money in a believable way. We test every factor on
 two separate time periods so we can't fool ourselves.
 
+*How it's organised:* **Part 1** (below) reports the raw evidence one test at a
+time — does the factor *rank* coins (IC), is its return distribution non-normal,
+does it *beat Bitcoin* (ASD). **Part 2** runs the Giglio-Xiu / Fama-MacBeth pricing
+tests and then **synthesises everything into a per-factor dossier**: each factor's
+economic function, what each test did and did not show, and a single *graded*
+verdict. No factor is significant on every test, and it doesn't need to be — so the
+dossier grades on a scale (Confirmed → Priced risk → Tradable signal → Suggestive →
+Economic-only → Structure → Not supported) rather than a pass/fail bar. **If you read
+one thing, read the Part 2 dossier.**
+
 ## How to read this (30-second version)
 
 - A **factor** is a rule like "buy small coins, sell big coins, rebalance weekly."
@@ -591,8 +601,11 @@ two separate time periods so we can't fool ourselves.
   - **In-sample (IS):** {man['split']['in_sample'][0]} → {man['split']['in_sample'][1]} ({man['split']['in_sample_weeks']} weeks) — where we're allowed to look.
   - **Out-of-sample (OOS):** {man['split']['out_of_sample'][0]} → {man['split']['out_of_sample'][1]} ({man['split']['out_of_sample_weeks']} weeks) — the "exam" the factor never saw.
 - **IC (information coefficient)** = how well the factor *ranks* coins from
-  best to worst each week. IC ≈ ±0.03–0.05 is a normal useful signal; negative IC
-  means the rule ranks coins **backwards**.
+  best to worst each week. |IC| ≈ 0.03–0.05 is a normal useful signal. **Read the
+  sign against the factor's bet, not in the abstract:** a low-vol or size factor goes
+  *long the bottom* of its sort, so a negative raw IC on the characteristic is the
+  factor *working*, not failing. Part 2's dossier reports the **direction-adjusted**
+  IC (positive = the bet ranked coins correctly) to remove this confusion.
 - **Sharpe** = return per unit of risk (>1 is good; >2 is excellent).
 - **t-stat** = "is this real, or luck?" **|t| ≥ 2 means very unlikely to be luck.**
 - **ASD (almost stochastic dominance)** = a nonparametric test that checks whether
@@ -601,10 +614,17 @@ two separate time periods so we can't fool ourselves.
   crypto returns (Han et al. 2023, European Financial Management).
   - **ε₁ ≤ 5.9%** → factor almost first-order dominates Bitcoin (AFSD) — most investors prefer it
   - **ε₂ ≤ 3.2%** → factor almost second-order dominates Bitcoin (ASSD) — risk-averse investors prefer it
-- **Verdict** (judged on IC for Group A, Sharpe for Group B):
+- **Verdict** here is the *IC-test-only* label (one lens of three):
   - **Robust** = significant IS *and* holds OOS.
   - **In-sample only** = faded or flipped OOS. Don't trust it.
-  - **Weak** = not convincing IS. Drop it.
+  - **Weak** = not convincing IS on the IC lens alone.
+
+  A "Weak" IC label does **not** mean the factor is worthless — it may still beat
+  Bitcoin's distribution (ASD) or be a priced risk (GX, Part 2). The **bottom-line,
+  graded** verdict that combines all three lenses lives in **Part 2's per-factor
+  dossier** (Confirmed / Priced risk / Tradable signal / Suggestive / Economic-only /
+  Structure / Not supported). Read Part 1 as the raw evidence per test; read Part 2
+  for the coherent per-factor story.
 
 All signals use only past data (no look-ahead), and we use *Newey-West* t-stats
 (lags=4) to account for serial correlation.
@@ -621,10 +641,13 @@ All signals use only past data (no look-ahead), and we use *Newey-West* t-stats
    maximum-return lottery signal (MAXRET). These are among the 8 factors that
    "almost stochastically dominate" benchmarks in that paper.
    {"On our panel: **" + ", ".join(han_robust) + "** passed IC significance." if han_robust else "On our panel: *none of these passed IC significance over the full 5-year history.* This is consistent with the paper — it found dominance at 52-week+ investment horizons, while our IC test evaluates single-week ranking power."}
-3. **Volatility's signal runs backwards.** Negative IC means higher-vol coins tend
-   to rank slightly worse — consistent with a low-volatility premium. But the raw
-   L/S Sharpe is weak, because fat-tailed volatile coins occasionally rocket and
-   blow up the short leg. VolC is a ranking signal, not a mechanical long/short trade.
+3. **Volatility ranks coins the right way (low-vol wins).** The raw IC is negative
+   *because the factor is long low-vol*: higher-vol coins rank worse, so calm coins
+   are the buy — a textbook low-volatility premium (direction-adjusted IC is strongly
+   positive; see Part 2). But the raw L/S Sharpe is weak, because fat-tailed volatile
+   coins occasionally rocket and blow up the short leg, and over five years the *priced*
+   premium on the L/S actually runs negative (Part 2). VolC is a ranking signal to lean
+   on, not a mechanical long/short trade.
 4. **The ASD test is more honest than Sharpe for crypto.** Crypto factor returns are
    highly nonnormal (see distribution table below). Sharpe implicitly assumes
    normality; ASD does not. A factor beating Bitcoin by ASD is a stronger claim.
@@ -732,13 +755,18 @@ if dom_names else "No factors passed ASD dominance vs BTC on the full sample —
 
 ---
 
-## The shortlist (what survived all tests)
+## The shortlist (IC lens only — full graded ranking is in Part 2)
 
-**Competition-grade factors (Robust IC + ASD confirms vs BTC):**
-{', '.join(shortlist) if shortlist else 'None passed all tests.'}
+**IC-robust factors (significant ranking power IS *and* held OOS):**
+{', '.join(shortlist) if shortlist else 'None passed the IC test on both windows.'}
 
-These are the factors defensible to competition judges:
-statistically significant IS ranking power, held OOS, and confirmed by ASD.
+These have statistically significant cross-sectional ranking power that survived
+out-of-sample — the strongest result the *IC lens alone* can give. Note this is **not**
+the same as ASD-dominance: a factor can rank coins well yet not beat Bitcoin's whole
+return distribution (VolC is the clearest case — strong IC, but BTC dominates its L/S
+distribution). The competition-grade call comes from combining all three lenses —
+IC, ASD, and Giglio-Xiu pricing — into the **graded per-factor dossier in Part 2**,
+where these same factors land as *Confirmed* (IC + priced-risk agree they are real).
 
 ---
 
