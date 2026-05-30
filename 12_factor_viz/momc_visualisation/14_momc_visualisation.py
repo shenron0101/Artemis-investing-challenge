@@ -23,7 +23,7 @@ from plotly.subplots import make_subplots
 from scipy import stats as sp_stats
 
 STAGE = Path(__file__).resolve().parent
-PARENT = STAGE.parent
+PARENT = STAGE.parent.parent / "09_nalfp_add"
 DATA_DIR = STAGE / "artifacts" / "data"
 MANIFEST_DIR = PARENT / "artifacts" / "manifests"
 PANEL_DIR = PARENT / "artifacts" / "data"

@@ -27,7 +27,7 @@ from plotly.subplots import make_subplots
 from scipy import stats as sp_stats
 
 STAGE = Path(__file__).resolve().parent
-PARENT = STAGE.parent
+PARENT = STAGE.parent.parent / "10_behavioral_gx"
 STAGE09 = PARENT.parent / "09_nalfp_add"
 DATA_DIR = STAGE / "artifacts" / "data"
 BEHAVIORAL_DATA = PARENT / "artifacts" / "data"
