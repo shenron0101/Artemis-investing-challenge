@@ -1,0 +1,621 @@
+"""09 — TVLC (TVL/Mcap) Factor Visualisation Pipeline.
+
+TVLC = Total Value Locked / Market Cap. Goes long coins with high TVL/mcap
+(usage-backed value) and short coins with low TVL/mcap.
+
+Universe note: Only ~37 symbols have TVL data, vs ~113 in the full universe.
+Results are therefore less stable than price-based factors.
+
+Grade: Priced risk — GX λ = -185.2%/yr, t = -4.71 (NEGATIVE: high TVL/mcap
+is a negative risk exposure — assets earn LESS, supporting TVL Irrelevance).
+No IC test (fundamental/pricing factor, not a weekly ranker).
+
+Outputs
+-------
+    artifacts/figures/tvlc_*.html / .png
+    artifacts/data/tvlc_viz_data.parquet
+    TVLC_VIZ_REPORT.md
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from scipy import stats as sp_stats
+
+STAGE = Path(__file__).resolve().parent
+PARENT = STAGE.parent
+DATA_DIR = STAGE / "artifacts" / "data"
+MANIFEST_DIR = PARENT / "artifacts" / "manifests"
+PANEL_DIR = PARENT / "artifacts" / "data"
+FIG_DIR = STAGE / "artifacts" / "figures"
+FIG_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+FACTOR_NAME = "TVLC"
+PREFIX = "tvlc"
+CHAR_COL = "tvl_to_mcap"
+DIRECTION = +1    # long high TVL/mcap (top 30%), short low (bottom 30%)
+FRAC = 0.30
+MIN_NAMES = 6     # smaller universe, lower threshold
+
+IS_LABEL = "In-Sample (2021-05-10 → 2024-11-11)"
+OOS_LABEL = "Out-of-Sample (2024-11-18 → 2026-05-25)"
+PLOTLY_TEMPLATE = "plotly_white"
+COLORS = {"IS": "#2196F3", "OOS": "#FF5722", "FULL": "#607D8B",
+          "SIG_POS": "#4CAF50", "SIG_NEG": "#F44336"}
+
+GX_LAMBDA = -185.2   # %/yr — NEGATIVE: high TVL/mcap exposure earns LESS
+GX_T = -4.71
+ASD_EPS1 = None   # not computed (not in Group A ASD table)
+ASD_EPS2 = None
+
+
+def load_manifest():
+    return json.loads((MANIFEST_DIR / "universe_manifest.json").read_text())
+
+
+def build_factor_returns(fund, trade_symbols):
+    fund = fund[fund["symbol"].isin(trade_symbols)].copy()
+
+    def one_week(block):
+        block = block.dropna(subset=["fwd_ret_1w", CHAR_COL])
+        n = len(block)
+        if n < MIN_NAMES:
+            return np.nan
+        k = max(int(round(n * FRAC)), 2)
+        r = block[CHAR_COL].rank(method="first")
+        long_m = r > n - k   # long high TVL/mcap
+        short_m = r <= k
+        return float(block.loc[long_m, "fwd_ret_1w"].mean()
+                     - block.loc[short_m, "fwd_ret_1w"].mean())
+
+    return fund.groupby("week").apply(one_week).rename("ret")
+
+
+def build_factor_ic(fund, trade_symbols):
+    fund = fund[fund["symbol"].isin(trade_symbols)].copy()
+    keep = fund.dropna(subset=["fwd_ret_1w", CHAR_COL])
+    return keep.groupby("week").apply(
+        lambda b: b[CHAR_COL].rank().corr(b["fwd_ret_1w"].rank())
+        if len(b) >= MIN_NAMES else np.nan
+    ).rename("ic")
+
+
+def newey_west_se(arr, lags=4):
+    r = np.asarray(arr, dtype=float)
+    n = len(r)
+    if n < 2:
+        return np.nan
+    e = r - r.mean()
+    s = (e * e).mean()
+    for lag in range(1, min(lags, n - 1) + 1):
+        s += 2.0 * (1 - lag / (lags + 1)) * (e[lag:] * e[:-lag]).mean()
+    return float(np.sqrt(max(s, 0.0) / n))
+
+
+def rolling_stat(series, window, func):
+    out = {}
+    vals = series.dropna()
+    for i in range(window, len(vals)):
+        sub = vals.iloc[i - window:i]
+        out[vals.index[i]] = func(sub)
+    return pd.Series(out)
+
+
+def _ts_str(v):
+    return v.strftime("%Y-%m-%d") if isinstance(v, pd.Timestamp) else str(v)
+
+
+def _add_vline(fig, x, annotation_text=None):
+    xs = _ts_str(x)
+    fig.add_shape(type="line", x0=xs, x1=xs, y0=0, y1=1,
+                  xref="x", yref="paper", line=dict(dash="dash", color="#999", width=1))
+    if annotation_text:
+        fig.add_annotation(x=xs, y=1.02, xref="x", yref="paper",
+                           text=annotation_text, showarrow=False, font=dict(size=10, color="#999"))
+
+
+def _add_vrect(fig, x0, x1, fillcolor, opacity=0.05):
+    fig.add_shape(type="rect", x0=_ts_str(x0), x1=_ts_str(x1), y0=0, y1=1,
+                  xref="x", yref="paper", fillcolor=fillcolor, opacity=opacity, line=dict(width=0))
+
+
+def chart_cumulative_return(ret, ic, is_lo, is_hi, oos_lo, oos_hi):
+    cum = (1 + ret).cumprod()
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08,
+                        subplot_titles=(f"{FACTOR_NAME} Cumulative Long/Short Return",
+                                        "Weekly IC (positive = high TVL/mcap predicts higher return)"))
+    for lbl, lo, hi, color in [(IS_LABEL, is_lo, is_hi, COLORS["IS"]),
+                                (OOS_LABEL, oos_lo, oos_hi, COLORS["OOS"])]:
+        c = cum[(cum.index >= lo) & (cum.index <= hi)]
+        if len(c) > 0:
+            fig.add_trace(go.Scatter(x=c.index, y=c.values, name=lbl,
+                                     line=dict(color=color, width=2)), row=1, col=1)
+        ic_s = ic[(ic.index >= lo) & (ic.index <= hi)].dropna()
+        if len(ic_s) > 0:
+            fig.add_trace(go.Bar(x=ic_s.index, y=ic_s.values,
+                                 marker_color=color, marker_opacity=0.5), row=2, col=1)
+    for y, c in [(0, "#666"), (-0.03, COLORS["SIG_NEG"]), (0.03, COLORS["SIG_POS"])]:
+        fig.add_hline(y=y, line_dash="dot", line_color=c, line_width=0.8, row=2, col=1)
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=700,
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
+
+
+def chart_rolling_ic(ic, is_lo, is_hi, oos_lo, oos_hi):
+    roll_ic = ic.rolling(26).mean().dropna()
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=roll_ic.index, y=roll_ic.values,
+                             name="26-week Rolling IC", line=dict(color=COLORS["FULL"], width=2)))
+    fig.add_hline(y=0, line_dash="dash", line_color="#666")
+    fig.add_hline(y=0.03, line_dash="dot", line_color=COLORS["SIG_POS"])
+    fig.add_hline(y=-0.03, line_dash="dot", line_color=COLORS["SIG_NEG"])
+    _add_vrect(fig, is_lo, is_hi, fillcolor=COLORS["IS"])
+    _add_vrect(fig, oos_lo, oos_hi, fillcolor=COLORS["OOS"])
+    _add_vline(fig, is_hi, annotation_text="IS / OOS")
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=500,
+                      title=f"{FACTOR_NAME} 26-Week Rolling Mean IC",
+                      xaxis_title="Week", yaxis_title="Rolling Mean IC")
+    return fig
+
+
+def chart_return_distribution(ret, is_lo, is_hi, oos_lo, oos_hi):
+    is_r = ret[(ret.index >= is_lo) & (ret.index <= is_hi)].dropna()
+    oos_r = ret[(ret.index >= oos_lo) & (ret.index <= oos_hi)].dropna()
+
+    def desc(s, label):
+        se = newey_west_se(s.values, 4)
+        return dict(label=label, n=len(s), mean=s.mean(), std=s.std(),
+                    skew=s.skew(), kurt=s.kurtosis(),
+                    t_nw=float(s.mean() / se) if se and se > 0 else np.nan,
+                    sharpe=float(s.mean() / s.std() * np.sqrt(52)) if s.std() > 0 else np.nan,
+                    min=s.min(), p25=s.quantile(0.25), median=s.median(),
+                    p75=s.quantile(0.75), max=s.max())
+
+    is_d = desc(is_r, "IS") if len(is_r) > 0 else {}
+    oos_d = desc(oos_r, "OOS") if len(oos_r) > 0 else {}
+    fig = make_subplots(rows=2, cols=2,
+                        subplot_titles=("Return Histogram (IS)", "Return Histogram (OOS)",
+                                        "Return Box Plot", "Autocorrelation"),
+                        vertical_spacing=0.12, horizontal_spacing=0.10)
+    for (r, c_i), series, color, label in [((1, 1), is_r, COLORS["IS"], "IS"),
+                                             ((1, 2), oos_r, COLORS["OOS"], "OOS")]:
+        if len(series) > 0:
+            bins = np.histogram(series, bins=30, density=True)
+            fig.add_trace(go.Bar(x=bins[1][:-1], y=bins[0], name=label,
+                                 marker_color=color, marker_opacity=0.7), row=r, col=c_i)
+    if len(is_r) > 0:
+        fig.add_trace(go.Box(y=is_r.values, name="IS", marker_color=COLORS["IS"], boxmean="sd"), row=2, col=1)
+    if len(oos_r) > 0:
+        fig.add_trace(go.Box(y=oos_r.values, name="OOS", marker_color=COLORS["OOS"], boxmean="sd"), row=2, col=1)
+    ref = oos_r if len(is_r) == 0 else is_r
+    if len(ref) > 5:
+        acf_vals = [ref.autocorr(lag=l) for l in range(1, 13)]
+        fig.add_trace(go.Bar(x=list(range(1, 13)), y=acf_vals,
+                             marker_color=COLORS["FULL"], marker_opacity=0.7), row=2, col=2)
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=800, showlegend=False)
+    return fig, is_d, oos_d
+
+
+def chart_rolling_sharpe(ret, is_lo, is_hi, oos_lo, oos_hi):
+    roll_sr = rolling_stat(ret, 52,
+                           lambda s: s.mean() / s.std() * np.sqrt(52) if s.std() > 0 else np.nan)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=roll_sr.index, y=roll_sr.dropna().values,
+                             line=dict(color=COLORS["FULL"], width=2)))
+    fig.add_hline(y=0, line_dash="dash", line_color="#666")
+    fig.add_hline(y=1, line_dash="dot", line_color=COLORS["SIG_POS"], annotation_text="Sharpe = 1")
+    fig.add_hline(y=-1, line_dash="dot", line_color=COLORS["SIG_NEG"], annotation_text="Sharpe = −1")
+    _add_vrect(fig, is_lo, is_hi, fillcolor=COLORS["IS"])
+    _add_vrect(fig, oos_lo, oos_hi, fillcolor=COLORS["OOS"])
+    _add_vline(fig, is_hi, annotation_text="IS / OOS")
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=500,
+                      title=f"{FACTOR_NAME} 52-Week Rolling Sharpe",
+                      xaxis_title="Week", yaxis_title="Annualised Sharpe")
+    return fig
+
+
+def chart_qq_plot(ret, is_lo, is_hi, oos_lo, oos_hi):
+    is_r = ret[(ret.index >= is_lo) & (ret.index <= is_hi)].dropna().sort_values()
+    oos_r = ret[(ret.index >= oos_lo) & (ret.index <= oos_hi)].dropna().sort_values()
+
+    def qq_data(s):
+        n = len(s)
+        t = sp_stats.norm.ppf(np.arange(1, n + 1) / (n + 1)) * s.std() + s.mean()
+        return t, s.values
+
+    fig = make_subplots(rows=1, cols=2, subplot_titles=("QQ — IS", "QQ — OOS"))
+    for col_i, series, color in [(1, is_r, COLORS["IS"]), (2, oos_r, COLORS["OOS"])]:
+        if len(series) > 1:
+            t, s = qq_data(series)
+            fig.add_trace(go.Scatter(x=t, y=s, mode="markers",
+                                     marker=dict(color=color, size=5, opacity=0.7)), row=1, col=col_i)
+            lo, hi = min(t.min(), s.min()), max(t.max(), s.max())
+            fig.add_trace(go.Scatter(x=[lo, hi], y=[lo, hi], mode="lines",
+                                     line=dict(color="#999", dash="dash")), row=1, col=col_i)
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=500, showlegend=False)
+    return fig
+
+
+def chart_tercile_returns(fund, trade_symbols, is_lo, is_hi, oos_lo, oos_hi):
+    fund = fund[fund["symbol"].isin(trade_symbols)].copy()
+    fund = fund.dropna(subset=[CHAR_COL, "fwd_ret_1w"])
+    t_labels = ["Low-TVL", "Mid-TVL", "High-TVL"]
+    fund["tercile"] = fund.groupby("week")[CHAR_COL].transform(
+        lambda x: pd.qcut(x, 3, labels=t_labels, duplicates="drop")
+        if len(x.dropna()) >= 4 else pd.NA)
+    tr = fund.dropna(subset=["tercile"]).groupby(["week", "tercile"])["fwd_ret_1w"].mean()
+    pivot = tr.reset_index().pivot(index="week", columns="tercile", values="fwd_ret_1w")
+    for lb in t_labels:
+        if lb not in pivot.columns:
+            pivot[lb] = np.nan
+    pivot = pivot[t_labels].dropna()
+    spread = pivot[t_labels[-1]] - pivot[t_labels[0]]
+
+    def ann(s):
+        return (1 + s).prod() ** (52 / max(len(s), 1)) - 1 if len(s) > 0 else np.nan
+
+    groups = {"IS": (is_lo, is_hi), "OOS": (oos_lo, oos_hi),
+              "Full": (pivot.index.min(), pivot.index.max())}
+    bars = {}
+    for nm, (lo, hi) in groups.items():
+        sub = pivot[(pivot.index >= lo) & (pivot.index <= hi)]
+        sp = spread[(spread.index >= lo) & (spread.index <= hi)]
+        bars[nm] = [ann(sub[lb]) * 100 if lb in sub else np.nan for lb in t_labels] + [ann(sp) * 100]
+
+    fig = go.Figure(data=[
+        go.Bar(name="IS", x=t_labels + ["TVLC Spread"], y=bars["IS"],
+               marker_color=COLORS["IS"], marker_opacity=0.8),
+        go.Bar(name="OOS", x=t_labels + ["TVLC Spread"], y=bars["OOS"],
+               marker_color=COLORS["OOS"], marker_opacity=0.8),
+        go.Bar(name="Full", x=t_labels + ["TVLC Spread"], y=bars["Full"],
+               marker_color=COLORS["FULL"], marker_opacity=0.5),
+    ])
+    fig.add_annotation(x=0.5, y=-0.15, xref="paper", yref="paper",
+                       text=f"Note: ~37 symbols with TVL data (vs ~113 full universe)",
+                       showarrow=False, font=dict(size=10, color="#888"))
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=550, barmode="group",
+                      title=f"{FACTOR_NAME} TVL/Mcap Tercile Annualised Returns",
+                      xaxis_title="TVL/Mcap Group", yaxis_title="Annualised Return (%)",
+                      margin=dict(b=80),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig, spread
+
+
+def chart_is_oos_metrics(ret, ic, is_lo, is_hi, oos_lo, oos_hi):
+    def metrics(r, ic_s, lbl):
+        if len(r) == 0:
+            return [np.nan] * 5
+        se = newey_west_se(r.values, 4)
+        t_ret = float(r.mean() / se) if se and se > 0 else np.nan
+        ic_mean = ic_s.mean() if len(ic_s) > 0 else np.nan
+        ic_se = newey_west_se(ic_s.values, 4) if len(ic_s) > 0 else np.nan
+        ic_t = float(ic_s.mean() / ic_se) if ic_se and ic_se > 0 else np.nan
+        sharpe = float(r.mean() / r.std() * np.sqrt(52)) if r.std() > 0 else np.nan
+        ann_ret = (1 + r).prod() ** (52 / len(r)) - 1 if len(r) > 0 else np.nan
+        return [ic_mean, ic_t, sharpe, ann_ret, r.mean()]
+
+    is_r = ret[(ret.index >= is_lo) & (ret.index <= is_hi)].dropna()
+    oos_r = ret[(ret.index >= oos_lo) & (ret.index <= oos_hi)].dropna()
+    is_ic = ic[(ic.index >= is_lo) & (ic.index <= is_hi)].dropna()
+    oos_ic = ic[(ic.index >= oos_lo) & (ic.index <= oos_hi)].dropna()
+
+    labels = ["IC", "IC t-stat", "Sharpe", "Ann. Return", "Mean Wkly Ret"]
+    fig = go.Figure(data=[
+        go.Bar(name="In-Sample", x=labels, y=metrics(is_r, is_ic, "IS"),
+               marker_color=COLORS["IS"], marker_opacity=0.8),
+        go.Bar(name="Out-of-Sample", x=labels, y=metrics(oos_r, oos_ic, "OOS"),
+               marker_color=COLORS["OOS"], marker_opacity=0.8),
+    ])
+    fig.add_hline(y=0, line_dash="dash", line_color="#666")
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=500, barmode="group",
+                      title=f"{FACTOR_NAME} Factor: IS vs OOS Dashboard",
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
+
+
+def chart_cumulative_tercile(fund, trade_symbols, is_lo, is_hi, oos_lo, oos_hi):
+    fund = fund[fund["symbol"].isin(trade_symbols)].copy()
+    fund = fund.dropna(subset=[CHAR_COL, "fwd_ret_1w"])
+    t_labels = ["Low-TVL", "Mid-TVL", "High-TVL"]
+    fund["tercile"] = fund.groupby("week")[CHAR_COL].transform(
+        lambda x: pd.qcut(x, 3, labels=t_labels, duplicates="drop")
+        if len(x.dropna()) >= 4 else pd.NA)
+    fund = fund.dropna(subset=["tercile"])
+    tr = fund.groupby(["week", "tercile"])["fwd_ret_1w"].mean().reset_index()
+    pivot = tr.pivot(index="week", columns="tercile", values="fwd_ret_1w")
+    for lb in t_labels:
+        if lb not in pivot.columns:
+            pivot[lb] = np.nan
+    pivot = pivot[t_labels].sort_index().fillna(0)
+    cum = (1 + pivot).cumprod()
+    colors_t = {t_labels[0]: "#4CAF50", t_labels[1]: "#FF9800", t_labels[-1]: "#F44336"}
+    fig = go.Figure()
+    for lb, color in colors_t.items():
+        fig.add_trace(go.Scatter(x=cum.index, y=cum[lb], name=lb, line=dict(color=color, width=2)))
+    spread_cum = (1 + (pivot[t_labels[-1]] - pivot[t_labels[0]])).cumprod()
+    fig.add_trace(go.Scatter(x=spread_cum.index, y=spread_cum.values, name="TVLC Spread",
+                             line=dict(color="#000", width=2.5, dash="dash")))
+    _add_vline(fig, is_hi)
+    _add_vrect(fig, is_lo, is_hi, fillcolor=COLORS["IS"], opacity=0.04)
+    _add_vrect(fig, oos_lo, oos_hi, fillcolor=COLORS["OOS"], opacity=0.04)
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=550,
+                      title=f"Cumulative Return by {FACTOR_NAME} Tercile (~37 symbols)",
+                      xaxis_title="Week", yaxis_title="Growth of $1",
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
+
+
+def chart_tvl_spread_over_time(fund, trade_symbols, is_lo, is_hi, oos_lo, oos_hi):
+    """Chart 9 (TVLC-specific): TVL/mcap for top vs bottom tercile over time.
+    Shows the spread in usage-backing across the DeFi universe."""
+    fund = fund[fund["symbol"].isin(trade_symbols)].copy()
+    fund = fund.dropna(subset=[CHAR_COL])
+    t_labels = ["Low-TVL", "High-TVL"]
+    fund["group"] = fund.groupby("week")[CHAR_COL].transform(
+        lambda x: pd.qcut(x, [0, 0.3, 0.7, 1.0], labels=["Low-TVL", "Mid-TVL", "High-TVL"],
+                          duplicates="drop")
+        if len(x.dropna()) >= 4 else pd.NA)
+    fund = fund.dropna(subset=["group"])
+    avg = fund.groupby(["week", "group"])[CHAR_COL].median().reset_index()
+    pivot = avg.pivot(index="week", columns="group", values=CHAR_COL)
+
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08,
+                        subplot_titles=("Median TVL/Mcap: High vs Low Tercile",
+                                        "TVL/Mcap Spread (High − Low)"))
+    for grp, color in [("Low-TVL", "#4CAF50"), ("High-TVL", "#F44336")]:
+        if grp in pivot.columns:
+            s = pivot[grp].rolling(4).mean().dropna()
+            fig.add_trace(go.Scatter(x=s.index, y=s.values, name=grp,
+                                     line=dict(color=color, width=2)), row=1, col=1)
+    if "High-TVL" in pivot.columns and "Low-TVL" in pivot.columns:
+        spread = (pivot["High-TVL"] - pivot["Low-TVL"]).rolling(4).mean().dropna()
+        fig.add_trace(go.Scatter(x=spread.index, y=spread.values,
+                                 name="Spread", line=dict(color=COLORS["FULL"], width=2)), row=2, col=1)
+    fig.add_hline(y=0, line_dash="dash", line_color="#666", row=2, col=1)
+    _add_vline(fig, is_hi, annotation_text="IS / OOS")
+    _add_vrect(fig, is_lo, is_hi, fillcolor=COLORS["IS"])
+    _add_vrect(fig, oos_lo, oos_hi, fillcolor=COLORS["OOS"])
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=700,
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    fig.update_yaxes(title_text="TVL/Mcap (median)", row=1, col=1)
+    fig.update_yaxes(title_text="Spread", row=2, col=1)
+    return fig
+
+
+def fmt_val(v, fmt=".2f"):
+    if isinstance(v, float) and np.isfinite(v):
+        return f"{v:{fmt}}"
+    return "N/A"
+
+
+def write_report(is_d, oos_d, adf_stat, adf_p, jb_is, jb_is_p, jb_oos, jb_oos_p, n_symbols):
+    md = f"""# TVLC (TVL/Mcap) Factor — Analysis Report
+
+*Generated by `19_tvlc_visualisation.py` from the Stage-09 5-year panel.*
+
+*Universe note: Only ~{n_symbols} symbols have TVL data (vs ~113 in the full universe).
+Results are less stable than price-based factors.*
+
+---
+
+## The Idea in Plain English
+
+**TVL** (Total Value Locked) is the total amount of crypto assets deposited into a
+DeFi protocol — think of it as the "deposits" in a decentralized bank. **TVL/Mcap**
+is the ratio of these deposits to the protocol's market capitalisation.
+
+A high TVL/Mcap ratio means: the protocol is processing a lot of value relative to what
+investors are willing to pay for it. A "value investor" might read this as cheap — the
+protocol has real usage, but the market hasn't fully priced it in yet.
+
+Each week:
+- **Buy** protocols with the highest TVL/Mcap (high usage, potentially undervalued)
+- **Short** protocols with the lowest TVL/Mcap (low usage, potentially overvalued)
+
+---
+
+## The Short Answer
+
+**Priced risk — but the premium runs in the wrong direction.**
+
+The Giglio-Xiu model finds λ = **{GX_LAMBDA:.1f}%/yr**, t = **{GX_T:.2f}** — highly significant,
+but *negative*. This means: protocols that load heavily on the TVLC factor (high TVL/mcap)
+earn **less** over the long run, not more. High TVL/mcap is a **negative** risk exposure.
+
+This supports the **"TVL Irrelevance" thesis** (Hartmann 2025): TVL is already
+fully priced into DeFi valuations. Buying protocols because they have high TVL
+doesn't earn a premium — it earns a discount.
+
+---
+
+## Why the Premium Is Negative
+
+**1. TVL chases performance, not the other way around.**
+When a protocol does well (price rises), TVL flows in as investors deposit assets to
+earn yield. By the time TVL/mcap looks high, the price run-up has already happened.
+
+**2. Yield farming inflates TVL temporarily.**
+Many DeFi protocols artificially inflate TVL through liquidity mining incentives. High
+TVL from incentivised liquidity is not a genuine signal of product-market fit — it's
+a temporary crowding-in that unwinds when incentives stop.
+
+**3. High TVL/mcap marks an overinvested DeFi protocol.**
+A protocol with very high TVL relative to its mcap may be a "TVL trap" — users have
+locked up funds that are now capital-inefficient, earning low yields while the token
+performs poorly due to inflation from reward emissions.
+
+**4. The negative GX premium is one of the strongest in the factor zoo.**
+|t| = {abs(GX_T):.2f} puts TVLC among the top three most statistically significant
+factors (alongside VolC and MAXRET). The signal is strong — just pointing the other
+direction from what intuition suggests.
+
+---
+
+## Return Distribution
+
+| Statistic | IS | OOS |
+|---|---|---|
+| Mean weekly return | {fmt_val(is_d.get('mean', np.nan)*100, '.3f')}% | {fmt_val(oos_d.get('mean', np.nan)*100, '.3f')}% |
+| Std (weekly) | {fmt_val(is_d.get('std', np.nan)*100, '.3f')}% | {fmt_val(oos_d.get('std', np.nan)*100, '.3f')}% |
+| Skewness | {fmt_val(is_d.get('skew', np.nan), '.2f')} | {fmt_val(oos_d.get('skew', np.nan), '.2f')} |
+| Excess Kurtosis | {fmt_val(is_d.get('kurt', np.nan), '.2f')} | {fmt_val(oos_d.get('kurt', np.nan), '.2f')} |
+
+---
+
+## Statistical Tests
+
+### Giglio-Xiu Pricing Result
+
+Full GX (K_hidden = 2): **λ = {GX_LAMBDA:.1f}%/yr, t = {GX_T:.2f}** — highly significant.
+One of the three strongest GX results in the full factor zoo. Assets with high TVL/mcap
+exposure earn significantly less over the long run.
+
+### Newey-West t-stat on IC
+
+IC is not a primary lens for TVLC — it is a fundamental/pricing factor, not a weekly
+ranking signal. The IC from the limited ~{n_symbols} symbol universe is computed and
+shown for completeness; it is not a primary test.
+
+### ADF Stationarity Test
+
+- ADF: **{fmt_val(adf_stat, '.3f')}**, p = **{fmt_val(adf_p, '.4f')}**
+- **{"Stationary" if adf_p < 0.05 else "Non-stationary"}**
+
+---
+
+## Visualisations
+
+### Cumulative Return & Weekly IC
+
+![Cumulative return](artifacts/figures/{PREFIX}_01_cumulative_return.png)
+
+### Rolling Mean IC
+
+![Rolling IC](artifacts/figures/{PREFIX}_02_rolling_ic.png)
+
+### Return Distribution
+
+![Return distribution](artifacts/figures/{PREFIX}_03_return_distribution.png)
+
+### Rolling Sharpe Ratio
+
+![Rolling Sharpe](artifacts/figures/{PREFIX}_04_rolling_sharpe.png)
+
+### QQ-Plot vs Normal Distribution
+
+![QQ plot](artifacts/figures/{PREFIX}_05_qq_plot.png)
+
+### TVL/Mcap Tercile Returns
+
+![Tercile returns](artifacts/figures/{PREFIX}_06_tercile_returns.png)
+
+Note limited universe (~{n_symbols} symbols). The High-TVL tercile often underperforms
+the Low-TVL tercile — consistent with the negative GX premium.
+
+### IS vs OOS Dashboard
+
+![IS vs OOS](artifacts/figures/{PREFIX}_07_is_oos.png)
+
+### Cumulative Return by TVL/Mcap Tercile
+
+![Cumulative tercile](artifacts/figures/{PREFIX}_08_cumulative_tercile.png)
+
+### TVL/Mcap Spread Over Time
+
+![TVL spread](artifacts/figures/{PREFIX}_09_tvl_spread.png)
+
+The spread between high and low TVL/mcap tercile medians over time. Periods where
+the spread widens represent higher cross-sectional dispersion in DeFi usage. This
+context is important: the factor only has information to work with when protocols
+genuinely differ in their usage-to-valuation ratios.
+"""
+    (STAGE / "TVLC_VIZ_REPORT.md").write_text(md)
+    print("  wrote TVLC_VIZ_REPORT.md")
+
+
+def main():
+    print("Loading data...")
+    man = load_manifest()
+    trade = set(man["trading_universe"]["symbols_ever_eligible"])
+    is_lo = pd.Timestamp(man["split"]["in_sample"][0])
+    is_hi = pd.Timestamp(man["split"]["in_sample"][1])
+    oos_lo = pd.Timestamp(man["split"]["out_of_sample"][0])
+    oos_hi = pd.Timestamp(man["split"]["out_of_sample"][1])
+
+    # Load fundamentals + merge with forward return from price panel
+    fund = pd.read_parquet(PANEL_DIR / "fundamentals_weekly.parquet")
+    fund["week"] = pd.to_datetime(fund["week"])
+
+    panel = pd.read_parquet(PANEL_DIR / "price_mcap_panel_weekly.parquet")
+    panel["week"] = pd.to_datetime(panel["week"])
+    panel = panel[panel["symbol"].isin(trade)]
+    px_wide = panel.pivot(index="week", columns="symbol", values="price").sort_index()
+    ret_wide = px_wide.pct_change()
+    fwd_ret = ret_wide.shift(-1)
+    fwd_long = fwd_ret.reset_index().melt(id_vars="week", var_name="symbol", value_name="fwd_ret_1w")
+    fund = fund.merge(fwd_long, on=["week", "symbol"], how="left")
+
+    n_symbols = fund["symbol"].nunique()
+    print(f"Fundamentals universe: {n_symbols} symbols")
+
+    factor_ret = build_factor_returns(fund, trade)
+    factor_ic = build_factor_ic(fund, trade)
+    factor_ret.index = pd.to_datetime(factor_ret.index)
+    factor_ic.index = pd.to_datetime(factor_ic.index)
+
+    print("Generating charts...")
+    fig1 = chart_cumulative_return(factor_ret, factor_ic, is_lo, is_hi, oos_lo, oos_hi)
+    fig2 = chart_rolling_ic(factor_ic, is_lo, is_hi, oos_lo, oos_hi)
+    fig3, is_d, oos_d = chart_return_distribution(factor_ret, is_lo, is_hi, oos_lo, oos_hi)
+    fig4 = chart_rolling_sharpe(factor_ret, is_lo, is_hi, oos_lo, oos_hi)
+    fig5 = chart_qq_plot(factor_ret, is_lo, is_hi, oos_lo, oos_hi)
+    fig6, _ = chart_tercile_returns(fund, trade, is_lo, is_hi, oos_lo, oos_hi)
+    fig7 = chart_is_oos_metrics(factor_ret, factor_ic, is_lo, is_hi, oos_lo, oos_hi)
+    fig8 = chart_cumulative_tercile(fund, trade, is_lo, is_hi, oos_lo, oos_hi)
+    fig9 = chart_tvl_spread_over_time(fund, trade, is_lo, is_hi, oos_lo, oos_hi)
+
+    charts = [
+        (f"{PREFIX}_01_cumulative_return", fig1),
+        (f"{PREFIX}_02_rolling_ic", fig2),
+        (f"{PREFIX}_03_return_distribution", fig3),
+        (f"{PREFIX}_04_rolling_sharpe", fig4),
+        (f"{PREFIX}_05_qq_plot", fig5),
+        (f"{PREFIX}_06_tercile_returns", fig6),
+        (f"{PREFIX}_07_is_oos", fig7),
+        (f"{PREFIX}_08_cumulative_tercile", fig8),
+        (f"{PREFIX}_09_tvl_spread", fig9),
+    ]
+    for name, fig in charts:
+        fig.write_html(str(FIG_DIR / f"{name}.html"))
+        fig.write_image(str(FIG_DIR / f"{name}.png"), scale=2)
+        print(f"  saved {name}.png")
+
+    pd.DataFrame({"ret": factor_ret, "ic": factor_ic}).to_parquet(
+        DATA_DIR / f"{PREFIX}_viz_data.parquet")
+
+    is_r = factor_ret[(factor_ret.index >= is_lo) & (factor_ret.index <= is_hi)].dropna()
+    oos_r = factor_ret[(factor_ret.index >= oos_lo) & (factor_ret.index <= oos_hi)].dropna()
+    from statsmodels.tsa.stattools import adfuller
+    try:
+        adf = adfuller(factor_ret.dropna(), autolag="AIC")
+        adf_stat, adf_p = adf[0], adf[1]
+    except Exception:
+        adf_stat, adf_p = np.nan, np.nan
+    jb_is = sp_stats.jarque_bera(is_r)[0] if len(is_r) > 5 else np.nan
+    jb_is_p = sp_stats.jarque_bera(is_r)[1] if len(is_r) > 5 else np.nan
+    jb_oos = sp_stats.jarque_bera(oos_r)[0] if len(oos_r) > 5 else np.nan
+    jb_oos_p = sp_stats.jarque_bera(oos_r)[1] if len(oos_r) > 5 else np.nan
+
+    write_report(is_d, oos_d, adf_stat, adf_p, jb_is, jb_is_p, jb_oos, jb_oos_p, n_symbols)
+    print(f"\nAll done. Charts in {FIG_DIR}")
+
+
+if __name__ == "__main__":
+    main()
