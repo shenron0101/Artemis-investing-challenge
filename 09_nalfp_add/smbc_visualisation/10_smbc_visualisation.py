@@ -33,8 +33,10 @@ from plotly.subplots import make_subplots
 from scipy import stats as sp_stats
 
 STAGE = Path(__file__).resolve().parent
+PARENT = STAGE.parent
 DATA_DIR = STAGE / "artifacts" / "data"
-MANIFEST_DIR = STAGE / "artifacts" / "manifests"
+MANIFEST_DIR = PARENT / "artifacts" / "manifests"
+PANEL_DIR = PARENT / "artifacts" / "data"
 FIG_DIR = STAGE / "artifacts" / "figures"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -502,7 +504,7 @@ def main():
     oos_lo = pd.Timestamp(man["split"]["out_of_sample"][0])
     oos_hi = pd.Timestamp(man["split"]["out_of_sample"][1])
 
-    panel = pd.read_parquet(DATA_DIR / "price_mcap_panel_weekly.parquet")
+    panel = pd.read_parquet(PANEL_DIR / "price_mcap_panel_weekly.parquet")
     panel["week"] = pd.to_datetime(panel["week"])
     panel = panel[panel["symbol"].isin(trade)]
 
@@ -514,7 +516,7 @@ def main():
     smbc_ic.index = pd.to_datetime(smbc_ic.index)
 
     # Load stored validation stats
-    val_stats = pd.read_parquet(DATA_DIR / "factor_validation_stats.parquet")
+    val_stats = pd.read_parquet(PANEL_DIR / "factor_validation_stats.parquet")
     smbc_row = val_stats[val_stats["factor"] == "SMBC"].iloc[0].to_dict()
 
     print("Chart 1: Cumulative return + IC bars...")

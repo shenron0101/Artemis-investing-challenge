@@ -464,6 +464,83 @@ FACTOR_WHAT = {
     "MispricingM": "Equal-weight ASSD-dominant composite",
 }
 
+# Sign of the long leg, used to turn the raw characteristic IC (char rank vs
+# forward return) into a *direction-adjusted* IC where positive always means
+# "the factor's bet ranked coins correctly". Without this, low-vol/size factors
+# (long the bottom of the sort) look like they have "backwards" IC when they are
+# actually working. None = no weekly characteristic IC (price/structure factor).
+FACTOR_DIR = {
+    "SMBC": -1, "MomC": +1, "VolC": -1, "NetMom": +1, "NetRel": +1,
+    "RMOM1w": +1, "RMOM2w": +1, "RMOM4w": +1, "MAXRET": +1,
+}
+
+# Per-factor economic function: the mechanism, why a premium *should* exist, and
+# the sign we expect a priori. This is the "why should this work at all" half of
+# every dossier entry — it stands on its own even when the statistics are thin.
+FACTOR_ECON = {
+    "RC": "The crypto market portfolio itself. Its premium is plain compensation for "
+          "bearing systematic crypto risk — the equity-premium analogue. We expect "
+          "λ>0 over the long run, but it is **not alpha**: every long-only holder "
+          "already earns it. We include it so the cross-sectional factors are priced "
+          "*net of* market beta.",
+    "SMBC": "**Size.** Small caps should out-earn large caps as payment for illiquidity, "
+            "thinner information coverage, and higher fundamental risk (the Fama-French "
+            "SMB analogue). Expected long-small/short-big premium >0 in risk-on regimes; "
+            "it can invert during flights to quality, when capital crowds into BTC/ETH.",
+    "MomC": "**Momentum.** Investors under-react to news, so recent 4-week winners keep "
+            "winning (Jegadeesh-Titman; Liu-Tsyvinski 2022). Expected premium >0, but "
+            "raw momentum is regime-fragile and crashes hard at trend reversals.",
+    "VolC": "**Low-volatility / betting-against-beta.** Leverage-constrained and "
+            "lottery-seeking investors over-pay for high-vol names, leaving calm coins "
+            "cheap (Frazzini-Pedersen 2014). Prediction: low-vol coins out-rank high-vol "
+            "ones, so the *long-low/short-high* bet should earn a positive premium.",
+    "NetMom": "**Within-cluster momentum.** Inside a tight correlation community, the coin "
+              "out-trending its peers tends to keep leading. Ranking *within* the cluster "
+              "strips out market beta and isolates idiosyncratic trend (Liu-Tsyvinski 2018). "
+              "Expected premium >0.",
+    "NetRel": "**Cross-cluster rotation.** Capital rotates between narratives; coins pulling "
+              "ahead of the *other* clusters are riding the rotation in, laggards are "
+              "rotating out. Expected premium >0 whenever narrative cycling is active.",
+    "FunC": "**Crypto 'value' / cash yield** = fees per dollar of market cap. Protocols "
+            "throwing off real cash should be cheap relative to fundamentals (the E/P "
+            "analogue). Expected premium >0 — but only ~half the universe earns fees, so "
+            "this is structurally under-powered.",
+    "TVLC": "**DeFi engagement** = TVL per dollar of market cap. The bull thesis is "
+            "usage-backed value; the competing 'TVL Irrelevance' view (Hartmann 2025) says "
+            "it is already in prices. Sign is genuinely ambiguous a priori — this factor is "
+            "a clean test of *whether TVL is priced at all*.",
+    "RMOM1w": "**Risk-adjusted momentum (1w).** Trend scaled by recent volatility "
+              "(Han et al. 2023). Dividing by risk strips the vol-driven noise that makes "
+              "raw momentum crash, so it should rank more cleanly than MomC. Expected >0.",
+    "RMOM2w": "**Risk-adjusted momentum (2w).** Two-week return over 4-week vol "
+              "(Han et al. 2023). Same logic as RMOM1w at a slightly slower horizon.",
+    "RMOM4w": "**Risk-adjusted momentum (4w)** = a 4-week Sharpe ratio (Han et al. 2023). "
+              "Rewards trend that is both large *and* consistent.",
+    "MAXRET": "**Lottery / max-return** (Han et al. 2023; Bali et al. 2011). Coins with an "
+              "extreme recent up-week attract lottery demand and get over-priced, so the "
+              "*correct* bet is to **short** the lottery — we expect high-max-return names "
+              "to under-perform (a reversal/over-pricing signal, not a buy-the-winner one).",
+    "SPC1": "Sparse-PCA risk **direction**, not an alpha bet — the dominant 'everything moves "
+            "together' axis (BTC/ETH/DeFi majors). Describes *how* the market co-moves.",
+    "SPC2": "Sparse-PCA risk **direction** — the payment/old-guard bloc (XRP, XLM, ADA, "
+            "ALGO, HBAR). Context for diversification, not a tradable premium.",
+    "SPC3": "Sparse-PCA risk **direction** — the alt-L1 bloc (SOL, AVAX, NEAR, ATOM, FET). "
+            "Context for diversification, not a tradable premium.",
+    "SPC4": "Sparse-PCA risk **direction** — the legacy/privacy + exchange bloc. "
+            "Context for diversification, not a tradable premium.",
+    "CCA1": "Macro-spanned **direction** — the slice of crypto returns explained by macro "
+            "(rates, DXY, risk appetite). Risk context, not alpha by construction.",
+    "CCA2": "Macro-spanned **direction** (2nd canonical axis). Risk context, not alpha.",
+    "CCA3": "Macro-spanned **direction** (3rd canonical axis). Risk context, not alpha.",
+    "MispricingM": "**Composite mispricing factor** — equal-weight of the L/S sleeves that "
+                   "almost-stochastically dominate BTC (Stambaugh-Yuan 2017; Han et al. 2023). "
+                   "Aggregates the common mispricing signal that no single thin factor proves "
+                   "on its own.",
+}
+
+# Factors that are risk *directions* (structure), not alpha candidates.
+STRUCTURE_FACTORS = {"SPC1", "SPC2", "SPC3", "SPC4", "CCA1", "CCA2", "CCA3"}
+
 
 def _fmt(v, decimals=2, sign=True, pct=False):
     if v is None or (isinstance(v, float) and not np.isfinite(v)):
@@ -472,6 +549,153 @@ def _fmt(v, decimals=2, sign=True, pct=False):
         return f"{v*100:+.1f}%" if sign else f"{v*100:.1f}%"
     fmt = f"{{:+.{decimals}f}}" if sign else f"{{:.{decimals}f}}"
     return fmt.format(float(v))
+
+
+# Graded confidence tiers. The whole point: a single |t|≥2 bar throws away
+# factors that are economically real but only semi-significant on a 264-week
+# sample, and it hides *which kind* of evidence backs a factor. We grade on the
+# coherent combination of (i) weekly ranking power (IC), (ii) distributional
+# dominance over BTC (ASD), and (iii) priced-risk evidence (GX/FMB λ).
+GRADE_ORDER = [
+    "Confirmed", "Priced risk", "Tradable signal",
+    "Suggestive", "Economic-only", "Structure", "Not supported",
+]
+GRADE_BLURB = {
+    "Confirmed":      "independent tests agree — real on this sample",
+    "Priced risk":    "compensated systematic exposure, but no week-to-week edge",
+    "Tradable signal": "ranks the cross-section, though not a priced *risk*",
+    "Suggestive":     "economic story intact + partial/semi-significant evidence",
+    "Economic-only":  "sound rationale, but the data here can't confirm it",
+    "Structure":      "a risk *direction* (how the market moves), not an alpha bet",
+    "Not supported":  "fails its own prediction on this sample",
+}
+
+
+def _signed_ic(fname, p1, key):
+    """Direction-adjusted IC t-stat: positive => the factor's bet ranked correctly."""
+    raw = p1.get(key, np.nan)
+    d = FACTOR_DIR.get(fname)
+    if d is None or not np.isfinite(raw):
+        return np.nan
+    return raw * d
+
+
+def grade_factor(fname, p1, full_lk):
+    """Return (grade, evidence_dict) synthesizing IC + ASD + GX pricing.
+
+    evidence_dict carries the already-signed/interpreted numbers the dossier
+    prose and the master table both reuse, so they can never disagree."""
+    tf = full_lk.get(fname, {}).get("tstat", np.nan)
+    lam = full_lk.get(fname, {}).get("lambda_ann", np.nan)
+    priced   = np.isfinite(tf) and abs(tf) >= 1.65
+    borderline = np.isfinite(tf) and 1.3 <= abs(tf) < 1.65
+
+    ic_is  = _signed_ic(fname, p1, "IS_IC_t")     # >0 means bet ranked correctly
+    ic_oos = _signed_ic(fname, p1, "OOS_IC_t")
+    has_ic = np.isfinite(ic_is)
+    # "rank power" = correct-direction IC, significant IS and still positive OOS
+    rank_strong = has_ic and ic_is >= 1.65 and np.isfinite(ic_oos) and ic_oos >= 1.0
+    rank_semi   = has_ic and ((ic_is >= 1.3) or (ic_is >= 1.0 and np.isfinite(ic_oos) and ic_oos >= 1.0))
+    # ranking that predicts the *opposite* of the long leg (reversal/lottery)
+    rank_reversal = has_ic and ic_is <= -1.65 and np.isfinite(ic_oos) and ic_oos <= -1.0
+
+    assd = bool(p1.get("assd_dom_btc"))
+    afsd = bool(p1.get("afsd_dom_btc"))
+    dom_by_btc = bool(p1.get("afsd_dom_by_btc"))
+
+    ev = dict(tf=tf, lam=lam, priced=priced, borderline=borderline,
+              ic_is=ic_is, ic_oos=ic_oos, has_ic=has_ic,
+              rank_strong=rank_strong, rank_semi=rank_semi, rank_reversal=rank_reversal,
+              assd=assd, afsd=afsd, dom_by_btc=dom_by_btc)
+
+    if fname == "RC":
+        return "Priced risk", ev          # special-cased to market-beta prose
+    if fname in STRUCTURE_FACTORS:
+        return "Structure", ev
+    if (rank_strong or rank_reversal) and priced:
+        return "Confirmed", ev
+    if priced and not (rank_strong or rank_reversal):
+        return "Priced risk", ev
+    if (rank_strong or rank_reversal) and not priced:
+        return "Tradable signal", ev
+    if assd or rank_semi or borderline:
+        return "Suggestive", ev
+    if dom_by_btc or (has_ic and ic_is <= -1.65 and not rank_reversal):
+        return "Not supported", ev
+    if not has_ic:                         # fundamentals: no weekly IC available
+        return "Economic-only", ev
+    return "Not supported", ev
+
+
+def _tests_prose(fname, ev, p1):
+    """One short paragraph reporting what each test actually said, interpreted."""
+    bits = []
+    # Weekly ranking (IC)
+    if ev["has_ic"]:
+        d = FACTOR_DIR.get(fname, 1)
+        verb = "predicts the cross-section" if ev["ic_is"] > 0 else "runs opposite the long leg"
+        ic_line = (f"Weekly ranking (direction-adjusted IC): IS t={_fmt(ev['ic_is'])}, "
+                   f"OOS t={_fmt(ev['ic_oos'])}")
+        if ev["rank_strong"]:
+            ic_line += " — significant in-sample and still pointing the right way out-of-sample."
+        elif ev["rank_reversal"]:
+            ic_line += " — the ranking is *significant but reversed*: high-signal names underperform, "
+            ic_line += "i.e. the tradable bet is to short them."
+        elif ev["rank_semi"]:
+            ic_line += " — marginal, but the correct sign survives into the OOS window."
+        else:
+            ic_line += f" — the signal {verb} only weakly here."
+        bits.append(ic_line)
+    else:
+        bits.append("Weekly ranking: no 5-year IC (price/fundamental/structure factor — "
+                    "judged on pricing, not on weekly rank).")
+    # ASD vs BTC
+    if np.isfinite(p1.get("asd_eps2", np.nan)):
+        if ev["assd"]:
+            bits.append(f"Distribution vs Bitcoin: **ASSD-dominant** (ε₂={_fmt(p1['asd_eps2'],3,False)} ≤ 0.032) "
+                        "— risk-averse investors prefer its whole return distribution to simply holding BTC.")
+        elif ev["dom_by_btc"]:
+            bits.append(f"Distribution vs Bitcoin: **dominated by BTC** (ε₁ reverse small) — its return "
+                        "distribution is worse than just holding Bitcoin.")
+        else:
+            bits.append(f"Distribution vs Bitcoin: neither dominates (ε₁={_fmt(p1.get('asd_eps1'),3,False)}, "
+                        f"ε₂={_fmt(p1.get('asd_eps2'),3,False)}).")
+    # Pricing (GX / FMB)
+    if np.isfinite(ev["tf"]):
+        if ev["priced"]:
+            bits.append(f"Priced risk (Giglio-Xiu, hidden-factor robust): **λ={_fmt(ev['lam'],pct=True)}/yr, "
+                        f"t={_fmt(ev['tf'])}** — a genuinely compensated exposure.")
+        elif ev["borderline"]:
+            bits.append(f"Priced risk: borderline (λ={_fmt(ev['lam'],pct=True)}/yr, t={_fmt(ev['tf'])}) — "
+                        "suggestive but under the |t|≥1.65 bar.")
+        else:
+            bits.append(f"Priced risk: not priced once hidden factors are controlled (t={_fmt(ev['tf'])}).")
+    return " ".join(bits)
+
+
+def factor_dossier(order, p1, full_lk) -> str:
+    """The centrepiece: one coherent entry per factor — economic function, what
+    the tests say, and a graded verdict — sorted strongest-evidence first."""
+    graded = []
+    for f in order:
+        if f not in p1 and f not in full_lk:
+            continue
+        grade, ev = grade_factor(f, p1.get(f, {}), full_lk)
+        graded.append((GRADE_ORDER.index(grade), f, grade, ev))
+    graded.sort(key=lambda x: (x[0], -abs(x[3]["tf"]) if np.isfinite(x[3]["tf"]) else 0))
+
+    out = []
+    for _, f, grade, ev in graded:
+        what = FACTOR_WHAT.get(f, f)
+        econ = FACTOR_ECON.get(f, "")
+        tests = _tests_prose(f, ev, p1.get(f, {}))
+        out.append(
+            f"#### {f} — {what}  ·  *{grade}*\n\n"
+            f"- **Economic function.** {econ}\n"
+            f"- **What the tests say.** {tests}\n"
+            f"- **Verdict — {grade}:** {GRADE_BLURB[grade]}."
+        )
+    return "\n\n".join(out)
 
 
 def write_results_part2(gx_full_results: dict, gx_is_results: dict,
@@ -554,22 +778,25 @@ def write_results_part2(gx_full_results: dict, gx_is_results: dict,
         e1_s     = _fmt(asd_e1, 3, False) if np.isfinite(asd_e1) else "—"
         e2_s     = _fmt(asd_e2, 3, False) if np.isfinite(asd_e2) else "—"
 
-        # overall conclusion
-        robust_ic  = verd.startswith("Robust")
-        priced_gx  = np.isfinite(tf) and abs(tf) >= 1.65
-        if fname == "RC":
-            conclusion = "Market beta — real but not tradable alpha"
-        elif robust_ic and priced_gx:
-            conclusion = "**Strongest evidence — IC + GX agree**"
-        elif robust_ic and not priced_gx:
-            conclusion = "IC robust; not a priced risk factor"
-        elif not robust_ic and priced_gx:
-            conclusion = "Priced risk factor; weak weekly ranking"
-        else:
-            conclusion = "Not confirmed by either test"
+        # overall conclusion — same graded call the dossier uses, so the
+        # summary table and the prose can never drift apart.
+        grade, _ = grade_factor(fname, p, full_lk)
+        conclusion = f"**{grade}**" if grade == "Confirmed" else grade
 
         return (f"| {fname} | {ic_is_s} | {ic_oos_s} | {afsd} | {assd} | "
                 f"{e1_s} | {e2_s} | {tf_s} | {conclusion} |")
+
+    # ---- shortlist grouped by graded tier (single source of truth) ----
+    by_grade: dict[str, list] = {g: [] for g in GRADE_ORDER}
+    for f in all_factors_ordered:
+        if f not in p1 and f not in full_lk:
+            continue
+        g, _ = grade_factor(f, p1.get(f, {}), full_lk)
+        by_grade[g].append(f)
+    shortlist_by_grade = "\n".join(
+        f"- **{g}** ({GRADE_BLURB[g]}): {', '.join(by_grade[g])}"
+        for g in GRADE_ORDER if by_grade[g]
+    )
 
     # ---- compose Part 2 markdown ----
     part2 = f"""## Part 2 — Economic significance: Giglio-Xiu + Fama-MacBeth pricing (5-year panel)
@@ -607,55 +834,33 @@ SPC1–4 (Sparse PCA) · CCA1–3 (macro-spanned).
 |---|---|---|---|---|---|---|---|---|
 """ + "\n".join(gx_row(f) for f in factors_full) + f"""
 
-### What each result means
+The bold t-stats above are *inputs*, not verdicts. The dossier below reads them
+together with the IC and ASD evidence from Part 1 so each factor gets one coherent
+story instead of being scattered across five tables.
 
-**The new Han et al. (2023) factors in GX pricing:**
+---
 
-"""
+### Per-factor dossier — economic function · what the tests say · graded verdict
 
-    # Narrative for new factors
-    for fname in ["RMOM1w", "RMOM2w", "RMOM4w", "MAXRET"]:
-        if fname not in full_lk:
-            continue
-        tf   = full_lk[fname].get("tstat", np.nan)
-        lf   = full_lk[fname].get("lambda_ann", np.nan)
-        p    = p1.get(fname, {})
-        ic_v = p.get("verdict", "").split(" (")[0]
-        assd_flag = "ASSD-dominant vs BTC" if p.get("assd_dom_btc") else "not ASD-dominant"
-        what = FACTOR_WHAT.get(fname, fname)
-        if np.isfinite(tf) and abs(tf) >= 1.65:
-            pricing_msg = f"**priced at t_gx = {_fmt(tf)}** (λ = {_fmt(lf, pct=True)}/yr)"
-        else:
-            pricing_msg = f"not priced (t_gx = {_fmt(tf)})"
-        part2 += (f"**{fname} ({what}):** IC verdict = {ic_v}; {assd_flag}; "
-                  f"GX pricing = {pricing_msg}.\n\n")
+We grade on a deliberately **non-binary** scale. A 264-week crypto panel cannot
+deliver |t|≥2 everywhere, and a factor can be real along one axis (it ranks coins,
+or it dominates BTC's distribution, or it is a priced risk) while silent along the
+others. Collapsing all of that to "significant / not significant" throws away most
+of what we actually learned, so we keep the **economic function** of every factor in
+view alongside whatever the statistics could and could not show.
 
-    # Existing factor commentary (concise, bridge to Part 1)
-    part2 += """**Cross-referencing with Part 1:**
+| Grade | What it means |
+|---|---|
+""" + "\n".join(f"| **{g}** | {GRADE_BLURB[g]} |" for g in GRADE_ORDER) + f"""
 
-- **VolC** is the only factor confirmed by all three tests: IC IS (t=−3.3), IC OOS (t=−4.3),
-  ASD (ε₂ → 1.0, dominated by BTC — its L/S return distribution is worse than BTC, consistent
-  with the short-leg blowup risk documented in Part 1), and GX-full (t=−4.14, **priced**).
-  The negative λ means the *long leg* (low-vol coins) earns less than the cross-section average
-  — investors overpay for calm coins. The ranking signal is real; the raw L/S trade is dangerous.
+Each entry answers three independent questions — does it **rank** coins week-to-week
+(IC, Part 1), does its **return distribution beat Bitcoin** (ASD, Part 1), and is it a
+**priced source of risk** (GX/FMB λ, above)? — and weighs them against the factor's
+standalone economic rationale. Sorted strongest-evidence first.
 
-- **MAXRET** passed IC (robust IS + OOS in Part 1) but does not show up as a *priced* systematic
-  risk factor in GX. This is the classic anomaly vs. risk-factor distinction: MAXRET has
-  predictive power week-to-week (ranking signal) but that predictability is not compensation
-  for loading on a systematic risk. It may reflect a lottery premium or short-term reversal.
+""" + factor_dossier(all_factors_ordered, p1, full_lk) + f"""
 
-- **TVLC** is priced (GX-full t=−3.40) but untestable by IC (no 5-year fundamentals).
-  The negative premium means high-TVL/mcap assets earn less — TVL Irrelevance (Hartmann 2025).
-
-- **RC** (market factor): strongly priced (GX-full t=+5.35). This is just the crypto equity
-  premium — real but not alpha.
-
-- **CCA1–3** (macro-spanned directions): look priced in GX-obs (t≈3.5) but the GX correction
-  kills the signal (t≈0). The hidden factors absorb the macro-crypto link entirely.
-
-"""
-
-    part2 += f"""### IS-only stability check (K_hidden = {k_is})
+### IS-only stability check (K_hidden = {k_is})
 
 IS window factors: {factors_is}. Priced at |t|≥1.65: {priced_is}.
 The IS window uses {k_is} hidden factors (vs {k_full} full-sample) because the shorter window
@@ -674,17 +879,19 @@ Each factor is judged on: IC ranking power (IS and OOS t-stats), ASD vs Bitcoin
 """ + "\n".join(master_row(f) for f in all_factors_ordered
                 if f in p1 or f in full_lk) + """
 
-**Legend:**
-- IC IS/OOS t: Newey-West t-stat on the mean IC (|t|≥2 = significant)
-- AFSD ✓: ε₁ ≤ 5.9% (almost first-order dominates Bitcoin)
-- ASSD ✓: ε₂ ≤ 3.2% (almost second-order dominates Bitcoin)
-- GX t_gx: Giglio-Xiu full-model t-stat (|t|≥1.65 = priced)
-- **Strongest evidence** = significant IC IS + OOS + priced in GX
+**Legend.** IC IS/OOS t = Newey-West t-stat on the mean IC (here shown *direction-raw*;
+the dossier reports the direction-adjusted version). AFSD ✓ = ε₁ ≤ 5.9%, ASSD ✓ = ε₂ ≤ 3.2%
+(almost first/second-order dominance over Bitcoin). GX t_gx = Giglio-Xiu full-model t
+(|t|≥1.65 = priced). The **Conclusion** column is the dossier grade — the same call used in
+the prose above, so the two can never disagree.
 
-**Shortlist — what survived all tests:**
+**The shortlist by grade.** Reading down the grades:
+{shortlist_by_grade}
 
-Only factors with *both* robust IC (|t|≥2 in IS and OOS) and GX pricing (|t|≥1.65) are
-genuinely confirmed from two independent angles. Everything else is confirmed by at most one method.
+*Confirmed* factors are backed from two independent angles and are the defensible core.
+*Priced risk* and *Tradable signal* factors are real but one-dimensional — useful, with a
+named limitation. *Suggestive* factors have an intact economic story and partial evidence:
+exactly the semi-significant cases a single |t|≥2 bar would have silently discarded.
 """
 
     # ---- write to RESULTS.md (preserve Part 1) ----

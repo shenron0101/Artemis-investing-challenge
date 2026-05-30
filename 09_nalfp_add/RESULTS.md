@@ -208,6 +208,10 @@ statistically significant IS ranking power, held OOS, and confirmed by ASD.
 
 ---
 
+---
+
+---
+
 ## Part 2 — Economic significance: Giglio-Xiu + Fama-MacBeth pricing (5-year panel)
 
 *What this section adds:* Part 1 tested whether each factor **ranks coins correctly** week-to-week
@@ -261,39 +265,155 @@ SPC1–4 (Sparse PCA) · CCA1–3 (macro-spanned).
 | CCA2 | Macro-spanned direction 2 | +5.3% | +0.18 | -17.8% | **-2.43** | +6.6% | +0.58 | No |
 | CCA3 | Macro-spanned direction 3 | +12.1% | +0.18 | -40.2% | **-2.43** | +14.9% | +0.58 | No |
 
-### What each result means
+The bold t-stats above are *inputs*, not verdicts. The dossier below reads them
+together with the IC and ASD evidence from Part 1 so each factor gets one coherent
+story instead of being scattered across five tables.
 
-**The new Han et al. (2023) factors in GX pricing:**
+---
 
-**RMOM1w (1-week risk-adj momentum (Han '23)):** IC verdict = Weak; ASSD-dominant vs BTC; GX pricing = **priced at t_gx = +1.86** (λ = +59.4%/yr).
+### Per-factor dossier — economic function · what the tests say · graded verdict
 
-**RMOM2w (2-week risk-adj momentum (Han '23)):** IC verdict = In-sample only; ASSD-dominant vs BTC; GX pricing = not priced (t_gx = +1.05).
+We grade on a deliberately **non-binary** scale. A 264-week crypto panel cannot
+deliver |t|≥2 everywhere, and a factor can be real along one axis (it ranks coins,
+or it dominates BTC's distribution, or it is a priced risk) while silent along the
+others. Collapsing all of that to "significant / not significant" throws away most
+of what we actually learned, so we keep the **economic function** of every factor in
+view alongside whatever the statistics could and could not show.
 
-**RMOM4w (4-week Sharpe momentum  (Han '23)):** IC verdict = In-sample only; not ASD-dominant; GX pricing = not priced (t_gx = +1.24).
+| Grade | What it means |
+|---|---|
+| **Confirmed** | independent tests agree — real on this sample |
+| **Priced risk** | compensated systematic exposure, but no week-to-week edge |
+| **Tradable signal** | ranks the cross-section, though not a priced *risk* |
+| **Suggestive** | economic story intact + partial/semi-significant evidence |
+| **Economic-only** | sound rationale, but the data here can't confirm it |
+| **Structure** | a risk *direction* (how the market moves), not an alpha bet |
+| **Not supported** | fails its own prediction on this sample |
 
-**MAXRET (Max weekly return, 4w trailing (Han '23)):** IC verdict = Robust; not ASD-dominant; GX pricing = **priced at t_gx = +5.52** (λ = +160.0%/yr).
+Each entry answers three independent questions — does it **rank** coins week-to-week
+(IC, Part 1), does its **return distribution beat Bitcoin** (ASD, Part 1), and is it a
+**priced source of risk** (GX/FMB λ, above)? — and weighs them against the factor's
+standalone economic rationale. Sorted strongest-evidence first.
 
-**Cross-referencing with Part 1:**
+#### MAXRET — Max weekly return, 4w trailing (Han '23)  ·  *Confirmed*
 
-- **VolC** is the only factor confirmed by all three tests: IC IS (t=−3.3), IC OOS (t=−4.3),
-  ASD (ε₂ → 1.0, dominated by BTC — its L/S return distribution is worse than BTC, consistent
-  with the short-leg blowup risk documented in Part 1), and GX-full (t=−4.14, **priced**).
-  The negative λ means the *long leg* (low-vol coins) earns less than the cross-section average
-  — investors overpay for calm coins. The ranking signal is real; the raw L/S trade is dangerous.
+- **Economic function.** **Lottery / max-return** (Han et al. 2023; Bali et al. 2011). Coins with an extreme recent up-week attract lottery demand and get over-priced, so the *correct* bet is to **short** the lottery — we expect high-max-return names to under-perform (a reversal/over-pricing signal, not a buy-the-winner one).
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-3.49, OOS t=-4.05 — the ranking is *significant but reversed*: high-signal names underperform, i.e. the tradable bet is to short them. Distribution vs Bitcoin: neither dominates (ε₁=0.545, ε₂=0.457). Priced risk (Giglio-Xiu, hidden-factor robust): **λ=+160.0%/yr, t=+5.52** — a genuinely compensated exposure.
+- **Verdict — Confirmed:** independent tests agree — real on this sample.
 
-- **MAXRET** passed IC (robust IS + OOS in Part 1) but does not show up as a *priced* systematic
-  risk factor in GX. This is the classic anomaly vs. risk-factor distinction: MAXRET has
-  predictive power week-to-week (ranking signal) but that predictability is not compensation
-  for loading on a systematic risk. It may reflect a lottery premium or short-term reversal.
+#### VolC — Low-vol minus high-vol  ·  *Confirmed*
 
-- **TVLC** is priced (GX-full t=−3.40) but untestable by IC (no 5-year fundamentals).
-  The negative premium means high-TVL/mcap assets earn less — TVL Irrelevance (Hartmann 2025).
+- **Economic function.** **Low-volatility / betting-against-beta.** Leverage-constrained and lottery-seeking investors over-pay for high-vol names, leaving calm coins cheap (Frazzini-Pedersen 2014). Prediction: low-vol coins out-rank high-vol ones, so the *long-low/short-high* bet should earn a positive premium.
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=+3.32, OOS t=+4.31 — significant in-sample and still pointing the right way out-of-sample. Distribution vs Bitcoin: **dominated by BTC** (ε₁ reverse small) — its return distribution is worse than just holding Bitcoin. Priced risk (Giglio-Xiu, hidden-factor robust): **λ=-185.8%/yr, t=-5.05** — a genuinely compensated exposure.
+- **Verdict — Confirmed:** independent tests agree — real on this sample.
 
-- **RC** (market factor): strongly priced (GX-full t=+5.35). This is just the crypto equity
-  premium — real but not alpha.
+#### TVLC — High TVL/mcap minus low  ·  *Priced risk*
 
-- **CCA1–3** (macro-spanned directions): look priced in GX-obs (t≈3.5) but the GX correction
-  kills the signal (t≈0). The hidden factors absorb the macro-crypto link entirely.
+- **Economic function.** **DeFi engagement** = TVL per dollar of market cap. The bull thesis is usage-backed value; the competing 'TVL Irrelevance' view (Hartmann 2025) says it is already in prices. Sign is genuinely ambiguous a priori — this factor is a clean test of *whether TVL is priced at all*.
+- **What the tests say.** Weekly ranking: no 5-year IC (price/fundamental/structure factor — judged on pricing, not on weekly rank). Priced risk (Giglio-Xiu, hidden-factor robust): **λ=-185.2%/yr, t=-4.71** — a genuinely compensated exposure.
+- **Verdict — Priced risk:** compensated systematic exposure, but no week-to-week edge.
+
+#### RC — Crypto market (value-weighted)  ·  *Priced risk*
+
+- **Economic function.** The crypto market portfolio itself. Its premium is plain compensation for bearing systematic crypto risk — the equity-premium analogue. We expect λ>0 over the long run, but it is **not alpha**: every long-only holder already earns it. We include it so the cross-sectional factors are priced *net of* market beta.
+- **What the tests say.** Weekly ranking: no 5-year IC (price/fundamental/structure factor — judged on pricing, not on weekly rank). Priced risk (Giglio-Xiu, hidden-factor robust): **λ=+217.2%/yr, t=+3.92** — a genuinely compensated exposure.
+- **Verdict — Priced risk:** compensated systematic exposure, but no week-to-week edge.
+
+#### RMOM1w — 1-week risk-adj momentum (Han '23)  ·  *Priced risk*
+
+- **Economic function.** **Risk-adjusted momentum (1w).** Trend scaled by recent volatility (Han et al. 2023). Dividing by risk strips the vol-driven noise that makes raw momentum crash, so it should rank more cleanly than MomC. Expected >0.
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.07, OOS t=-0.27 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.000 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk (Giglio-Xiu, hidden-factor robust): **λ=+59.4%/yr, t=+1.86** — a genuinely compensated exposure.
+- **Verdict — Priced risk:** compensated systematic exposure, but no week-to-week edge.
+
+#### RMOM2w — 2-week risk-adj momentum (Han '23)  ·  *Suggestive*
+
+- **Economic function.** **Risk-adjusted momentum (2w).** Two-week return over 4-week vol (Han et al. 2023). Same logic as RMOM1w at a slightly slower horizon.
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-2.46, OOS t=-0.24 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.003 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk: not priced once hidden factors are controlled (t=+1.05).
+- **Verdict — Suggestive:** economic story intact + partial/semi-significant evidence.
+
+#### SMBC — Small minus big (size)  ·  *Suggestive*
+
+- **Economic function.** **Size.** Small caps should out-earn large caps as payment for illiquidity, thinner information coverage, and higher fundamental risk (the Fama-French SMB analogue). Expected long-small/short-big premium >0 in risk-on regimes; it can invert during flights to quality, when capital crowds into BTC/ETH.
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.49, OOS t=-1.25 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.031 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk: not priced once hidden factors are controlled (t=+0.36).
+- **Verdict — Suggestive:** economic story intact + partial/semi-significant evidence.
+
+#### NetRel — Cross-cluster rotation  ·  *Suggestive*
+
+- **Economic function.** **Cross-cluster rotation.** Capital rotates between narratives; coins pulling ahead of the *other* clusters are riding the rotation in, laggards are rotating out. Expected premium >0 whenever narrative cycling is active.
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.72, OOS t=-0.10 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.026 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC. Priced risk: not priced once hidden factors are controlled (t=-0.01).
+- **Verdict — Suggestive:** economic story intact + partial/semi-significant evidence.
+
+#### MispricingM — Equal-weight ASSD-dominant composite  ·  *Suggestive*
+
+- **Economic function.** **Composite mispricing factor** — equal-weight of the L/S sleeves that almost-stochastically dominate BTC (Stambaugh-Yuan 2017; Han et al. 2023). Aggregates the common mispricing signal that no single thin factor proves on its own.
+- **What the tests say.** Weekly ranking: no 5-year IC (price/fundamental/structure factor — judged on pricing, not on weekly rank). Distribution vs Bitcoin: **ASSD-dominant** (ε₂=0.000 ≤ 0.032) — risk-averse investors prefer its whole return distribution to simply holding BTC.
+- **Verdict — Suggestive:** economic story intact + partial/semi-significant evidence.
+
+#### FunC — High fees/mcap minus low  ·  *Economic-only*
+
+- **Economic function.** **Crypto 'value' / cash yield** = fees per dollar of market cap. Protocols throwing off real cash should be cheap relative to fundamentals (the E/P analogue). Expected premium >0 — but only ~half the universe earns fees, so this is structurally under-powered.
+- **What the tests say.** Weekly ranking: no 5-year IC (price/fundamental/structure factor — judged on pricing, not on weekly rank). Priced risk: not priced once hidden factors are controlled (t=+0.40).
+- **Verdict — Economic-only:** sound rationale, but the data here can't confirm it.
+
+#### SPC3 — Sparse-PCA: Alt-L1 direction  ·  *Structure*
+
+- **Economic function.** Sparse-PCA risk **direction** — the alt-L1 bloc (SOL, AVAX, NEAR, ATOM, FET). Context for diversification, not a tradable premium.
+- **What the tests say.** Weekly ranking: no 5-year IC (price/fundamental/structure factor — judged on pricing, not on weekly rank). Distribution vs Bitcoin: neither dominates (ε₁=0.843, ε₂=1.000). Priced risk (Giglio-Xiu, hidden-factor robust): **λ=-221.4%/yr, t=-3.88** — a genuinely compensated exposure.
+- **Verdict — Structure:** a risk *direction* (how the market moves), not an alpha bet.
+
+#### SPC2 — Sparse-PCA: Payment/old-guard direction  ·  *Structure*
+
+- **Economic function.** Sparse-PCA risk **direction** — the payment/old-guard bloc (XRP, XLM, ADA, ALGO, HBAR). Context for diversification, not a tradable premium.
+- **What the tests say.** Weekly ranking: no 5-year IC (price/fundamental/structure factor — judged on pricing, not on weekly rank). Distribution vs Bitcoin: neither dominates (ε₁=0.571, ε₂=1.000). Priced risk: borderline (λ=-56.0%/yr, t=-1.47) — suggestive but under the |t|≥1.65 bar.
+- **Verdict — Structure:** a risk *direction* (how the market moves), not an alpha bet.
+
+#### SPC4 — Sparse-PCA: Legacy/exchange direction  ·  *Structure*
+
+- **Economic function.** Sparse-PCA risk **direction** — the legacy/privacy + exchange bloc. Context for diversification, not a tradable premium.
+- **What the tests say.** Weekly ranking: no 5-year IC (price/fundamental/structure factor — judged on pricing, not on weekly rank). Distribution vs Bitcoin: neither dominates (ε₁=0.500, ε₂=1.000). Priced risk: borderline (λ=+93.5%/yr, t=+1.42) — suggestive but under the |t|≥1.65 bar.
+- **Verdict — Structure:** a risk *direction* (how the market moves), not an alpha bet.
+
+#### SPC1 — Sparse-PCA: DeFi-majors direction  ·  *Structure*
+
+- **Economic function.** Sparse-PCA risk **direction**, not an alpha bet — the dominant 'everything moves together' axis (BTC/ETH/DeFi majors). Describes *how* the market co-moves.
+- **What the tests say.** Weekly ranking: no 5-year IC (price/fundamental/structure factor — judged on pricing, not on weekly rank). Distribution vs Bitcoin: **dominated by BTC** (ε₁ reverse small) — its return distribution is worse than just holding Bitcoin. Priced risk: not priced once hidden factors are controlled (t=+1.08).
+- **Verdict — Structure:** a risk *direction* (how the market moves), not an alpha bet.
+
+#### CCA1 — Macro-spanned direction 1  ·  *Structure*
+
+- **Economic function.** Macro-spanned **direction** — the slice of crypto returns explained by macro (rates, DXY, risk appetite). Risk context, not alpha by construction.
+- **What the tests say.** Weekly ranking: no 5-year IC (price/fundamental/structure factor — judged on pricing, not on weekly rank). Priced risk: not priced once hidden factors are controlled (t=-0.58).
+- **Verdict — Structure:** a risk *direction* (how the market moves), not an alpha bet.
+
+#### CCA2 — Macro-spanned direction 2  ·  *Structure*
+
+- **Economic function.** Macro-spanned **direction** (2nd canonical axis). Risk context, not alpha.
+- **What the tests say.** Weekly ranking: no 5-year IC (price/fundamental/structure factor — judged on pricing, not on weekly rank). Priced risk: not priced once hidden factors are controlled (t=+0.58).
+- **Verdict — Structure:** a risk *direction* (how the market moves), not an alpha bet.
+
+#### CCA3 — Macro-spanned direction 3  ·  *Structure*
+
+- **Economic function.** Macro-spanned **direction** (3rd canonical axis). Risk context, not alpha.
+- **What the tests say.** Weekly ranking: no 5-year IC (price/fundamental/structure factor — judged on pricing, not on weekly rank). Priced risk: not priced once hidden factors are controlled (t=+0.58).
+- **Verdict — Structure:** a risk *direction* (how the market moves), not an alpha bet.
+
+#### RMOM4w — 4-week Sharpe momentum  (Han '23)  ·  *Not supported*
+
+- **Economic function.** **Risk-adjusted momentum (4w)** = a 4-week Sharpe ratio (Han et al. 2023). Rewards trend that is both large *and* consistent.
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-2.61, OOS t=-0.86 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: neither dominates (ε₁=0.449, ε₂=0.052). Priced risk: not priced once hidden factors are controlled (t=+1.24).
+- **Verdict — Not supported:** fails its own prediction on this sample.
+
+#### NetMom — Within-cluster momentum  ·  *Not supported*
+
+- **Economic function.** **Within-cluster momentum.** Inside a tight correlation community, the coin out-trending its peers tends to keep leading. Ranking *within* the cluster strips out market beta and isolates idiosyncratic trend (Liu-Tsyvinski 2018). Expected premium >0.
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-0.15, OOS t=-0.81 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: neither dominates (ε₁=0.852, ε₂=0.958). Priced risk: not priced once hidden factors are controlled (t=+0.37).
+- **Verdict — Not supported:** fails its own prediction on this sample.
+
+#### MomC — 4-week raw momentum  ·  *Not supported*
+
+- **Economic function.** **Momentum.** Investors under-react to news, so recent 4-week winners keep winning (Jegadeesh-Titman; Liu-Tsyvinski 2022). Expected premium >0, but raw momentum is regime-fragile and crashes hard at trend reversals.
+- **What the tests say.** Weekly ranking (direction-adjusted IC): IS t=-1.66, OOS t=+0.13 — the signal runs opposite the long leg only weakly here. Distribution vs Bitcoin: neither dominates (ε₁=0.474, ε₂=0.208). Priced risk: not priced once hidden factors are controlled (t=-0.10).
+- **Verdict — Not supported:** fails its own prediction on this sample.
 
 ### IS-only stability check (K_hidden = 4)
 
@@ -311,36 +431,38 @@ Each factor is judged on: IC ranking power (IS and OOS t-stats), ASD vs Bitcoin
 
 | Factor | IC IS t | IC OOS t | AFSD? | ASSD? | ε₁ | ε₂ | GX t_gx | Conclusion |
 |---|---|---|---|---|---|---|---|---|
-| RC | — | — | — | — | — | — | +3.92 | Market beta — real but not tradable alpha |
-| VolC | -3.32 | -4.31 | ✗ | ✗ | 0.983 | 1.000 | -5.05 | **Strongest evidence — IC + GX agree** |
-| MAXRET | -3.49 | -4.05 | ✗ | ✗ | 0.545 | 0.457 | +5.52 | **Strongest evidence — IC + GX agree** |
-| TVLC | — | — | — | — | — | — | -4.71 | Priced risk factor; weak weekly ranking |
-| SMBC | +1.49 | +1.25 | ✗ | ✓ | 0.476 | 0.031 | +0.36 | Not confirmed by either test |
-| MomC | -1.66 | +0.13 | ✗ | ✗ | 0.474 | 0.208 | -0.10 | Not confirmed by either test |
-| NetMom | -0.15 | -0.81 | ✗ | ✗ | 0.852 | 0.958 | +0.37 | Not confirmed by either test |
-| NetRel | -1.72 | -0.10 | ✗ | ✓ | 0.341 | 0.026 | -0.01 | Not confirmed by either test |
-| RMOM1w | -1.07 | -0.27 | ✗ | ✓ | 0.302 | 0.000 | +1.86 | Priced risk factor; weak weekly ranking |
-| RMOM2w | -2.46 | -0.24 | ✗ | ✓ | 0.404 | 0.003 | +1.05 | Not confirmed by either test |
-| RMOM4w | -2.61 | -0.86 | ✗ | ✗ | 0.449 | 0.052 | +1.24 | Not confirmed by either test |
-| FunC | — | — | — | — | — | — | +0.40 | Not confirmed by either test |
-| SPC1 | — | — | ✗ | ✗ | 0.978 | 1.000 | +1.08 | Not confirmed by either test |
-| SPC2 | — | — | ✗ | ✗ | 0.571 | 1.000 | -1.47 | Not confirmed by either test |
-| SPC3 | — | — | ✗ | ✗ | 0.843 | 1.000 | -3.88 | Priced risk factor; weak weekly ranking |
-| SPC4 | — | — | ✗ | ✗ | 0.500 | 1.000 | +1.42 | Not confirmed by either test |
-| CCA1 | — | — | — | — | — | — | -0.58 | Not confirmed by either test |
-| CCA2 | — | — | — | — | — | — | +0.58 | Not confirmed by either test |
-| CCA3 | — | — | — | — | — | — | +0.58 | Not confirmed by either test |
-| MispricingM | — | — | ✗ | ✓ | 0.429 | 0.000 | — | Not confirmed by either test |
+| RC | — | — | — | — | — | — | +3.92 | Priced risk |
+| VolC | -3.32 | -4.31 | ✗ | ✗ | 0.983 | 1.000 | -5.05 | **Confirmed** |
+| MAXRET | -3.49 | -4.05 | ✗ | ✗ | 0.545 | 0.457 | +5.52 | **Confirmed** |
+| TVLC | — | — | — | — | — | — | -4.71 | Priced risk |
+| SMBC | +1.49 | +1.25 | ✗ | ✓ | 0.476 | 0.031 | +0.36 | Suggestive |
+| MomC | -1.66 | +0.13 | ✗ | ✗ | 0.474 | 0.208 | -0.10 | Not supported |
+| NetMom | -0.15 | -0.81 | ✗ | ✗ | 0.852 | 0.958 | +0.37 | Not supported |
+| NetRel | -1.72 | -0.10 | ✗ | ✓ | 0.341 | 0.026 | -0.01 | Suggestive |
+| RMOM1w | -1.07 | -0.27 | ✗ | ✓ | 0.302 | 0.000 | +1.86 | Priced risk |
+| RMOM2w | -2.46 | -0.24 | ✗ | ✓ | 0.404 | 0.003 | +1.05 | Suggestive |
+| RMOM4w | -2.61 | -0.86 | ✗ | ✗ | 0.449 | 0.052 | +1.24 | Not supported |
+| FunC | — | — | — | — | — | — | +0.40 | Economic-only |
+| SPC1 | — | — | ✗ | ✗ | 0.978 | 1.000 | +1.08 | Structure |
+| SPC2 | — | — | ✗ | ✗ | 0.571 | 1.000 | -1.47 | Structure |
+| SPC3 | — | — | ✗ | ✗ | 0.843 | 1.000 | -3.88 | Structure |
+| SPC4 | — | — | ✗ | ✗ | 0.500 | 1.000 | +1.42 | Structure |
+| CCA1 | — | — | — | — | — | — | -0.58 | Structure |
+| CCA2 | — | — | — | — | — | — | +0.58 | Structure |
+| CCA3 | — | — | — | — | — | — | +0.58 | Structure |
+| MispricingM | — | — | ✗ | ✓ | 0.429 | 0.000 | — | Suggestive |
 
-**Legend:**
-- IC IS/OOS t: Newey-West t-stat on the mean IC (|t|≥2 = significant)
-- AFSD ✓: ε₁ ≤ 5.9% (almost first-order dominates Bitcoin)
-- ASSD ✓: ε₂ ≤ 3.2% (almost second-order dominates Bitcoin)
-- GX t_gx: Giglio-Xiu full-model t-stat (|t|≥1.65 = priced)
-- **Strongest evidence** = significant IC IS + OOS + priced in GX
+**Legend.** IC IS/OOS t = Newey-West t-stat on the mean IC (here shown *direction-raw*;
+the dossier reports the direction-adjusted version). AFSD ✓ = ε₁ ≤ 5.9%, ASSD ✓ = ε₂ ≤ 3.2%
+(almost first/second-order dominance over Bitcoin). GX t_gx = Giglio-Xiu full-model t
+(|t|≥1.65 = priced). The **Conclusion** column is the dossier grade — the same call used in
+the prose above, so the two can never disagree.
 
-**Shortlist — what survived all tests:**
+**The shortlist by grade.** Reading down the grades:
+{shortlist_by_grade}
 
-Only factors with *both* robust IC (|t|≥2 in IS and OOS) and GX pricing (|t|≥1.65) are
-genuinely confirmed from two independent angles. Everything else is confirmed by at most one method.
+*Confirmed* factors are backed from two independent angles and are the defensible core.
+*Priced risk* and *Tradable signal* factors are real but one-dimensional — useful, with a
+named limitation. *Suggestive* factors have an intact economic story and partial evidence:
+exactly the semi-significant cases a single |t|≥2 bar would have silently discarded.
 
