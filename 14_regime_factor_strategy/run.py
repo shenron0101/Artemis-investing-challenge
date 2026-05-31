@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Stage 14 - Regime-aware weekly crypto factor strategy.
+Stage 14 - XGBoost regime-aware weekly crypto factor strategy.
 
 This script uses the factors summarized in 12_factor_viz/RESULTS.md, detects
-market regimes with a causal Gaussian HMM, optimizes three weekly long/short
-strategy variants in-sample, and writes an embedded-plot RESULTS.md.
+market regimes with a chronological train/test XGBoost classifier, optimizes
+three weekly long/short strategy variants in-sample, and writes an embedded-plot
+RESULTS.md.
 """
 from __future__ import annotations
 
@@ -19,10 +20,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.express as px
-from hmmlearn.hmm import GaussianHMM
+from sklearn.neural_network import MLPRegressor
+from sklearn.metrics import accuracy_score, f1_score, log_loss
+from xgboost import XGBClassifier
 
 warnings.filterwarnings("ignore")
-logging.getLogger("hmmlearn").setLevel(logging.ERROR)
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = Path(__file__).resolve().parent
@@ -47,8 +49,34 @@ MAX_SHORT_ASSET_WEIGHT = 0.065
 LONG_WEIGHT_EXPONENT = 1.8
 SHORT_WEIGHT_EXPONENT = 1.1
 TURNOVER_CAP = 0.45
-HMM_STATES = ["RiskOff", "Neutral", "RiskOn"]
+REGIME_STATES = ["RiskOff", "Neutral", "RiskOn"]
 LONG_SHARE_BY_REGIME = {"RiskOn": 0.90, "Neutral": 0.75, "RiskOff": 0.70}
+XGB_FEATURES = ["csd_z", "dbtc_z", "netent_z", "mktmom_z", "btcdom_z", "mktvol_z"]
+XGB_PARAMS = {
+    "objective": "multi:softprob",
+    "num_class": 3,
+    "n_estimators": 120,
+    "max_depth": 2,
+    "learning_rate": 0.05,
+    "subsample": 0.85,
+    "colsample_bytree": 0.85,
+    "reg_lambda": 3.0,
+    "eval_metric": "mlogloss",
+    "random_state": 42,
+    "n_jobs": 1,
+}
+NN_PARAMS = {
+    "hidden_layer_sizes": (24, 8),
+    "activation": "relu",
+    "solver": "adam",
+    "alpha": 0.002,
+    "learning_rate_init": 0.002,
+    "max_iter": 500,
+    "early_stopping": True,
+    "validation_fraction": 0.20,
+    "n_iter_no_change": 20,
+    "random_state": 42,
+}
 
 # The active factor set intentionally covers the factors called out in
 # 12_factor_viz/RESULTS.md. Unsupported factors are included with small base
@@ -69,6 +97,7 @@ FACTOR_ORDER = [
     "NetMom",
     "FunC",
 ]
+NN_FEATURES = [f"z_{fac}" for fac in FACTOR_ORDER] + [f"p_{state}" for state in REGIME_STATES]
 
 CORE = ["VolC", "MAXRET"]
 PRICED = ["CRASH8", "BETA26", "TVLC", "SKEW52", "NEWC"]
@@ -256,7 +285,31 @@ def factor_ic(panel: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def build_regime_panel(panel: pd.DataFrame) -> pd.DataFrame:
+def regime_classification_metrics(regime: pd.DataFrame) -> dict[str, dict[str, float]]:
+    out = {}
+    labeled = regime.dropna(subset=["target_regime", "predicted_regime"])
+    for split, g in labeled.groupby("split"):
+        if g["target_regime"].nunique() < 2:
+            continue
+        labels = REGIME_STATES
+        y_true = g["target_regime"].map({name: i for i, name in enumerate(labels)}).astype(int)
+        y_pred = g["predicted_regime"].map({name: i for i, name in enumerate(labels)}).astype(int)
+        probs = g[[f"p_{name}" for name in labels]].clip(1e-9, 1.0)
+        out[str(split)] = {
+            "accuracy": float(accuracy_score(y_true, y_pred)),
+            "macro_f1": float(f1_score(y_true, y_pred, average="macro")),
+            "log_loss": float(log_loss(y_true, probs, labels=list(range(len(labels))))),
+            "weeks": int(len(g)),
+        }
+    return out
+
+
+def build_regime_panel(
+    panel: pd.DataFrame,
+    first_oos: pd.Timestamp | None = None,
+    *,
+    persist: bool = True,
+) -> pd.DataFrame:
     mcap = read_parquet("price_mcap_panel_weekly.parquet")
     mcap["week"] = pd.to_datetime(mcap["week"])
     mcap["symbol"] = mcap["symbol"].astype(str).str.upper()
@@ -271,8 +324,9 @@ def build_regime_panel(panel: pd.DataFrame) -> pd.DataFrame:
     weekly["btc_dom"] = btc_mcap / total_mcap
     weekly["dbtc_dom"] = weekly["btc_dom"] - weekly["btc_dom"].shift(4)
     weekly["mktmom4"] = weekly["mkt_ret"].rolling(4, min_periods=2).sum()
+    weekly["mktvol8"] = weekly["mkt_ret"].rolling(8, min_periods=4).std()
 
-    obs_cols = ["csd", "dbtc_dom", "network_entropy", "mktmom4"]
+    obs_cols = ["csd", "dbtc_dom", "network_entropy", "mktmom4", "btc_dom", "mktvol8"]
     for col in obs_cols:
         weekly[f"{col}_z"] = rolling_z(weekly[col]).shift(1)
 
@@ -281,65 +335,76 @@ def build_regime_panel(panel: pd.DataFrame) -> pd.DataFrame:
     # instead of dropping the older regime history.
     weekly["network_entropy_z"] = weekly["network_entropy_z"].fillna(0.0)
 
-    obs = weekly[[f"{c}_z" for c in obs_cols]].dropna(subset=["csd_z", "dbtc_dom_z", "mktmom4_z"])
-    obs.columns = ["csd_z", "dbtc_z", "netent_z", "mktmom_z"]
+    target_score = (
+        rolling_z(weekly["mktmom4"], minp=12)
+        - 0.50 * rolling_z(weekly["csd"], minp=12)
+        - 0.25 * rolling_z(weekly["dbtc_dom"], minp=12)
+    )
+    valid_score = target_score.dropna()
+    if len(valid_score) >= 12:
+        lo, hi = valid_score.quantile([1 / 3, 2 / 3])
+    else:
+        lo, hi = -0.35, 0.35
+    weekly["target_regime"] = np.select(
+        [target_score <= lo, target_score >= hi],
+        ["RiskOff", "RiskOn"],
+        default="Neutral",
+    )
+
+    obs = weekly.rename(
+        columns={
+            "dbtc_dom_z": "dbtc_z",
+            "network_entropy_z": "netent_z",
+            "mktmom4_z": "mktmom_z",
+            "btc_dom_z": "btcdom_z",
+            "mktvol8_z": "mktvol_z",
+        }
+    )
+    obs = obs.dropna(subset=["csd_z", "dbtc_z", "mktmom_z", "btcdom_z", "mktvol_z", "target_regime"])
+    if first_oos is None:
+        first_oos = pd.to_datetime(obs.index[int(len(obs) * 0.70)])
+    else:
+        first_oos = pd.to_datetime(first_oos)
+
+    label_to_int = {name: i for i, name in enumerate(REGIME_STATES)}
+    train = obs[obs.index < first_oos].copy()
+    predictable = obs.copy()
+    x_all = predictable[XGB_FEATURES].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    x_train = train[XGB_FEATURES].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    y_train = train["target_regime"].map(label_to_int).astype(int)
 
     rows = []
-    model = None
-    last_fit = -999
-    # Keep the HMM lightweight enough for an iterative research run. Multi-start
-    # is still useful, but two seeds and quarterly refits are sufficient here.
-    seeds = [0, 42]
-    values = obs.to_numpy()
-    weeks = list(obs.index)
+    if len(train) >= 30 and y_train.nunique() == 3:
+        clf = XGBClassifier(**XGB_PARAMS)
+        clf.fit(x_train, y_train)
+        proba = clf.predict_proba(x_all)
+        if proba.shape[1] != len(REGIME_STATES):
+            fixed = np.zeros((len(proba), len(REGIME_STATES)))
+            for i, cls in enumerate(getattr(clf, "classes_", [])):
+                fixed[:, int(cls)] = proba[:, i]
+            proba = fixed
+    else:
+        # Very short samples cannot support a supervised three-class model; use
+        # neutral probabilities while retaining the train/test split metadata.
+        proba = np.tile(np.array([[0.0, 1.0, 0.0]]), (len(x_all), 1))
 
-    for i, wk in enumerate(weeks):
-        if i < 52:
-            rows.append({"week": wk, "p_RiskOff": 0.0, "p_Neutral": 1.0, "p_RiskOn": 0.0})
-            continue
-        if model is None or i - last_fit >= 13:
-            best_model = None
-            best_score = -np.inf
-            x_train = values[: i + 1]
-            for seed in seeds:
-                try:
-                    candidate = GaussianHMM(
-                        n_components=3,
-                        covariance_type="full",
-                        n_iter=80,
-                        tol=1e-3,
-                        min_covar=1e-3,
-                        random_state=seed,
-                    )
-                    candidate.fit(x_train)
-                    score = candidate.score(x_train)
-                    path = candidate.predict(x_train)
-                    occupancy = np.bincount(path, minlength=3).max() / len(path)
-                    if occupancy <= 0.88 and score > best_score:
-                        best_model = candidate
-                        best_score = score
-                except Exception:
-                    continue
-            if best_model is not None:
-                model = best_model
-                last_fit = i
-
-        if model is None:
-            rows.append({"week": wk, "p_RiskOff": 0.0, "p_Neutral": 1.0, "p_RiskOn": 0.0})
-            continue
-
-        means = model.means_
-        risk_score = means[:, 3] + means[:, 0] - means[:, 1]
-        order = np.argsort(risk_score)
-        mapping = {int(order[0]): "RiskOff", int(order[1]): "Neutral", int(order[2]): "RiskOn"}
-        try:
-            proba = model.predict_proba(values[: i + 1])[-1]
-        except Exception:
-            proba = np.array([0.0, 1.0, 0.0])
-        p = {"RiskOff": 0.0, "Neutral": 0.0, "RiskOn": 0.0}
-        for state_idx, state_prob in enumerate(proba):
-            p[mapping[state_idx]] += float(state_prob)
-        rows.append({"week": wk, "p_RiskOff": p["RiskOff"], "p_Neutral": p["Neutral"], "p_RiskOn": p["RiskOn"]})
+    for wk, probs in zip(x_all.index, proba):
+        probs = np.asarray(probs, dtype=float)
+        if not np.isfinite(probs).all() or probs.sum() <= 0:
+            probs = np.array([0.0, 1.0, 0.0])
+        probs = probs / probs.sum()
+        pred = REGIME_STATES[int(np.argmax(probs))]
+        rows.append(
+            {
+                "week": wk,
+                "p_RiskOff": float(probs[0]),
+                "p_Neutral": float(probs[1]),
+                "p_RiskOn": float(probs[2]),
+                "predicted_regime": pred,
+                "target_regime": obs.loc[wk, "target_regime"],
+                "split": "test" if wk >= first_oos else "train",
+            }
+        )
 
     regime = pd.DataFrame(rows)
     all_weeks = pd.DataFrame({"week": sorted(panel["week"].unique())})
@@ -349,9 +414,14 @@ def build_regime_panel(panel: pd.DataFrame) -> pd.DataFrame:
     empty = regime[["p_RiskOff", "p_Neutral", "p_RiskOn"]].sum(axis=1) == 0
     regime.loc[empty, "p_Neutral"] = 1.0
     regime["label"] = regime[["p_RiskOff", "p_Neutral", "p_RiskOn"]].idxmax(axis=1).str.replace("p_", "", regex=False)
-    regime = regime.merge(weekly.reset_index(), on="week", how="left")
-    regime.to_csv(DATA_OUT / "regime_panel.csv", index=False)
-    regime.to_parquet(DATA_OUT / "regime_panel.parquet", index=False)
+    weekly_meta = weekly.reset_index().drop(columns=["target_regime"], errors="ignore")
+    regime = regime.merge(weekly_meta, on="week", how="left")
+    fallback_split = pd.Series(np.where(regime["week"] >= first_oos, "test", "train"), index=regime.index)
+    regime["split"] = regime["split"].fillna(fallback_split)
+    regime["predicted_regime"] = regime["predicted_regime"].fillna(regime["label"])
+    if persist:
+        regime.to_csv(DATA_OUT / "regime_panel.csv", index=False)
+        regime.to_parquet(DATA_OUT / "regime_panel.parquet", index=False)
     return regime
 
 
@@ -395,7 +465,7 @@ def weekly_factor_weights(
             if b <= 0:
                 raw[fac] = 0.0
                 continue
-            activation = sum(float(r[f"p_{state}"]) * ACTIVATION[fac][state] for state in HMM_STATES)
+            activation = sum(float(r[f"p_{state}"]) * ACTIVATION[fac][state] for state in REGIME_STATES)
             ic = 0.0
             if r["week"] in ic_wide.index and fac in ic_wide:
                 ic = float(ic_wide.loc[r["week"], fac])
@@ -427,6 +497,46 @@ def build_signal(panel: pd.DataFrame, factor_weights: pd.DataFrame) -> pd.DataFr
     return pd.concat(parts, ignore_index=True)
 
 
+def build_neural_network_signal(
+    panel: pd.DataFrame,
+    regime: pd.DataFrame,
+    first_oos: pd.Timestamp,
+    *,
+    persist: bool = True,
+) -> pd.DataFrame:
+    """Predict next-week returns with an in-sample MLP using XGBoost regimes."""
+    regime_probs = regime[["week", "p_RiskOff", "p_Neutral", "p_RiskOn"]].copy()
+    df = panel.merge(regime_probs, on="week", how="left")
+    for col in ["p_RiskOff", "p_Neutral", "p_RiskOn"]:
+        df[col] = df[col].fillna(0.0)
+    empty = df[["p_RiskOff", "p_Neutral", "p_RiskOn"]].sum(axis=1) == 0
+    df.loc[empty, "p_Neutral"] = 1.0
+
+    x = df[NN_FEATURES].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    y = df["fwd_ret"].replace([np.inf, -np.inf], np.nan)
+    train_mask = (df["week"] < pd.to_datetime(first_oos)) & y.notna()
+    if train_mask.sum() < 200:
+        signal = np.zeros(len(df), dtype=float)
+    else:
+        x_train = x.loc[train_mask].copy()
+        y_train = y.loc[train_mask].clip(y.loc[train_mask].quantile(0.01), y.loc[train_mask].quantile(0.99))
+        mu = x_train.mean()
+        sd = x_train.std(ddof=0).replace(0, 1.0)
+        x_train_scaled = (x_train - mu) / sd
+        x_train_scaled.index = pd.to_datetime(df.loc[train_mask, "week"])
+        x_scaled = (x - mu) / sd
+        model = MLPRegressor(**NN_PARAMS)
+        model.fit(x_train_scaled, y_train)
+        signal = model.predict(x_scaled)
+
+    out = df[["week", "symbol", "fwd_ret", "vol4", "cluster_id"]].copy()
+    out["signal"] = signal
+    if persist:
+        out.to_csv(DATA_OUT / "neural_network_signals.csv", index=False)
+        out.to_parquet(DATA_OUT / "neural_network_signals.parquet", index=False)
+    return out
+
+
 def gross_for_week(candidate: Candidate, r: pd.Series) -> float:
     return (
         float(r["p_RiskOn"]) * candidate.gross_risk_on
@@ -436,7 +546,7 @@ def gross_for_week(candidate: Candidate, r: pd.Series) -> float:
 
 
 def long_share_for_week(r: pd.Series) -> float:
-    return sum(float(r[f"p_{state}"]) * LONG_SHARE_BY_REGIME[state] for state in HMM_STATES)
+    return sum(float(r[f"p_{state}"]) * LONG_SHARE_BY_REGIME[state] for state in REGIME_STATES)
 
 
 def leg_count(n_assets: int, top_frac: float, target: float, cap: float) -> int:
@@ -726,13 +836,13 @@ def plot_regime(regime: pd.DataFrame) -> None:
         colors=["#c83e4d", "#d9a441", "#357a38"],
         alpha=0.85,
     )
-    plt.title("Causal HMM Regime Probabilities")
+    plt.title("XGBoost Regime Probabilities")
     plt.ylabel("Probability")
     plt.xlabel("Week")
     plt.ylim(0, 1)
     plt.legend(loc="upper left", ncol=3)
     plt.tight_layout()
-    plt.savefig(FIG_OUT / "hmm_regimes.png", dpi=160)
+    plt.savefig(FIG_OUT / "xgboost_regimes.png", dpi=160)
     plt.close()
 
 
@@ -848,7 +958,7 @@ def regime_exposure_table(selected_pnl: dict[str, pd.DataFrame], regime: pd.Data
         x = pnl.merge(regime_cols, on="week", how="left")
         x["long_share"] = x["long_gross"] / x["gross_exposure"].replace(0, np.nan)
         grouped = x.groupby("label")
-        for label in HMM_STATES:
+        for label in REGIME_STATES:
             if label not in grouped.groups:
                 continue
             g = grouped.get_group(label)
@@ -920,7 +1030,8 @@ def write_results(
     factor_avg = pd.DataFrame(factor_avg).set_index("Variant")[FACTOR_ORDER]
     factor_avg.to_csv(DATA_OUT / "average_factor_weights.csv")
 
-    counts = regime["label"].value_counts().reindex(HMM_STATES).fillna(0).astype(int)
+    counts = regime["label"].value_counts().reindex(REGIME_STATES).fillna(0).astype(int)
+    detector_metrics = regime_classification_metrics(regime)
     top_grid = all_results.sort_values("is_sharpe", ascending=False).head(8)[
         ["candidate", "is_sharpe", "is_ann_return", "is_max_dd", "oos_sharpe", "oos_ann_return", "oos_max_dd"]
     ]
@@ -962,7 +1073,7 @@ def write_results(
         for display in selected_pnl
     )
 
-    md = f"""# Stage 14 - Regime-Aware Weekly Factor Strategy
+    md = f"""# Stage 14 - XGBoost Regime-Aware Weekly Factor Strategy
 
 Generated by `14_regime_factor_strategy/run.py`.
 
@@ -988,15 +1099,16 @@ VolC is low volatility, MAXRET fades recent spikes, CRASH8 buys the most-crashed
 coins, BETA26 buys high-beta coins, NEWC buys younger coins, and TVLC buys low
 TVL/mcap because the reported premium is negative for high TVL/mcap exposure.
 
-## Regime Detection
+## XGBoost Regime Detection
 
-Regimes are detected with a causal 3-state Gaussian HMM. The observation vector is
-lagged one week and contains rolling z-scores of cross-sectional dispersion,
-4-week BTC dominance change, network entropy, and 4-week equal-weight market
-momentum. The HMM is refit on an expanding window every 13 weeks and produces soft
-RiskOff, Neutral, and RiskOn probabilities.
+Regimes are detected with a supervised 3-class XGBoost classifier. The target
+regime is derived from contemporaneous market state using market momentum,
+cross-sectional dispersion, and BTC dominance change, while the feature vector is
+lagged one week and contains `{", ".join(XGB_FEATURES)}`. The classifier is fit
+only on weeks before `{first_oos:%Y-%m-%d}` and then predicts soft RiskOff,
+Neutral, and RiskOn probabilities for both the training and held-out weeks.
 
-HMM hard-label counts:
+XGBoost hard-label counts:
 
 | Regime | Weeks |
 |---|---:|
@@ -1004,7 +1116,13 @@ HMM hard-label counts:
 | Neutral | {counts.get('Neutral', 0)} |
 | RiskOn | {counts.get('RiskOn', 0)} |
 
-![HMM regimes](artifacts/figures/hmm_regimes.png)
+Train/test classifier diagnostics:
+
+```json
+{json.dumps(detector_metrics, indent=2)}
+```
+
+![XGBoost regimes](artifacts/figures/xgboost_regimes.png)
 
 ## Optimized Variants
 
@@ -1017,6 +1135,12 @@ winner repeated three times:
   candidates, with catastrophic drawdowns filtered out.
 - **Balanced** maximizes a percentile blend of Sharpe, annualized return, and
   drawdown control among the remaining candidates.
+
+I also test a separate **Neural Network Optimizer**. It uses the same XGBoost
+regime probabilities, trains an in-sample `MLPRegressor` on factor z-scores plus
+regime probabilities to predict next-week returns, and then routes those
+predictions through the same portfolio construction constraints as the balanced
+book.
 
 {params_md()}
 
@@ -1040,7 +1164,7 @@ mainly act as a hedge sleeve that grows in RiskOff while total gross falls.
 
 {exposure_table(selected_pnl, selected_weights)}
 
-Average exposure by hard HMM regime:
+Average exposure by hard XGBoost regime:
 
 {regime_exposure_table(selected_pnl, regime)}
 
@@ -1058,7 +1182,9 @@ Interactive weekly coin-weight bubble animation:
 ## Average Factor Weights
 
 The table below is the average weekly composite factor weight after regime
-activation and IC blending. It is not portfolio asset weight.
+activation and IC blending for the three grid-selected modes. It is not
+portfolio asset weight, and the neural-network optimizer is omitted because it
+learns asset-level return predictions rather than explicit factor sleeve weights.
 
 {factor_md()}
 
@@ -1085,22 +1211,27 @@ activation and IC blending. It is not portfolio asset weight.
 - `artifacts/data/factor_ic_timeseries.parquet`
 - `artifacts/data/selected_parameters.csv`
 - `artifacts/data/average_factor_weights.csv`
+- `artifacts/data/neural_network_signals.parquet`
 {selected_weight_files}
 - `artifacts/figures/weekly_weight_bubbles.html`
 - `artifacts/manifests/metrics.json`
 
 ## Caveats
 
-This is a first usable implementation, not a production allocator. The HMM state
-labels are economically mapped by state means, transaction costs are simplified,
+This is a first usable implementation, not a production allocator. The supervised
+regime labels are heuristic market-state labels, transaction costs are simplified,
 and the grid search is deliberately small to avoid overfitting. The results should
 be read as a strategy research prototype that turns the validated factors into a
-regime-aware weekly portfolio.
+machine-learning regime-aware weekly portfolio.
 """
     (STAGE / "RESULTS.md").write_text(md)
 
     metrics = {
         "first_oos_week": str(first_oos.date()),
+        "regime_detector": "xgboost",
+        "xgboost_features": XGB_FEATURES,
+        "xgboost_params": XGB_PARAMS,
+        "regime_classification_metrics": detector_metrics,
         "selected_candidates": selected_names,
         "full": full_metrics,
         "is": is_metrics,
@@ -1118,15 +1249,15 @@ def main() -> None:
     panel = build_factor_panel()
     print(f"Panel rows: {len(panel):,}; weeks: {panel['week'].nunique():,}; symbols: {panel['symbol'].nunique():,}", flush=True)
 
-    print("Computing HMM regimes...", flush=True)
-    regime = build_regime_panel(panel)
+    weeks = sorted(panel["week"].dropna().unique())
+    first_oos = pd.to_datetime(weeks[-OOS_WEEKS])
+
+    print("Computing XGBoost regimes...", flush=True)
+    regime = build_regime_panel(panel, first_oos=first_oos)
 
     print("Computing factor ICs and optimizer grid...", flush=True)
     ic_ts = factor_ic(panel)
     ic_wide = rolling_ic_weight(ic_ts)
-
-    weeks = sorted(panel["week"].dropna().unique())
-    first_oos = pd.to_datetime(weeks[-OOS_WEEKS])
 
     all_rows = []
     stored = {}
@@ -1174,6 +1305,20 @@ def main() -> None:
         weights.to_parquet(DATA_OUT / f"{safe}_weekly_weights.parquet", index=False)
         fw.to_csv(DATA_OUT / f"{safe}_factor_weights.csv", index=False)
         fw.to_parquet(DATA_OUT / f"{safe}_factor_weights.parquet", index=False)
+
+    print("Testing neural-network portfolio optimizer...", flush=True)
+    nn_signal = build_neural_network_signal(panel, regime, first_oos)
+    nn_candidate = selected_candidates["Balanced"]
+    nn_weights = construct_weights(nn_signal, regime, nn_candidate)
+    nn_pnl = backtest(nn_weights, panel)
+    selected_names["Neural Network Optimizer"] = "mlp_return_forecaster"
+    selected_candidates["Neural Network Optimizer"] = nn_candidate
+    selected_pnl["Neural Network Optimizer"] = nn_pnl
+    selected_weights["Neural Network Optimizer"] = nn_weights
+    nn_pnl.to_csv(DATA_OUT / "neural_network_optimizer_weekly_pnl.csv", index=False)
+    nn_pnl.to_parquet(DATA_OUT / "neural_network_optimizer_weekly_pnl.parquet", index=False)
+    nn_weights.to_csv(DATA_OUT / "neural_network_optimizer_weekly_weights.csv", index=False)
+    nn_weights.to_parquet(DATA_OUT / "neural_network_optimizer_weekly_weights.parquet", index=False)
 
     bm = benchmark_returns(panel)
     bm.to_csv(DATA_OUT / "benchmarks.csv", index=False)

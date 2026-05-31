@@ -85,3 +85,7 @@ reports/*.html
 !05_btc_direction/artifacts/**/.gitkeep
 !06_artemis_econometrics/artifacts/**/.gitkeep
 !07_hidden_factor_pricing/artifacts/**/.gitkeep
+
+# Data artifacts — CSV/parquet are large and regenerable, kept out of version control
+*.csv
+*.parquet

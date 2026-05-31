@@ -61,6 +61,29 @@ def sample_regime() -> pd.DataFrame:
     )
 
 
+def sample_factor_panel_for_regime() -> pd.DataFrame:
+    weeks = pd.date_range("2022-01-03", periods=90, freq="W-MON")
+    rows = []
+    for t, wk in enumerate(weeks):
+        cycle_ret = [-0.04, -0.01, 0.035][t % 3]
+        for i in range(18):
+            rows.append(
+                {
+                    "week": wk,
+                    "symbol": "BTC" if i == 0 else f"C{i:02d}",
+                    "ret": cycle_ret + (i - 8) * 0.0005,
+                    "fwd_ret": np.nan,
+                    "mcap": 2_000_000_000.0 if i == 0 else 100_000_000.0 + i,
+                    "cluster_id": i % 4,
+                    "network_entropy": 1.8 + 0.01 * (t % 5),
+                    "vol4": 0.1,
+                }
+            )
+    panel = pd.DataFrame(rows)
+    panel["fwd_ret"] = panel.groupby("symbol")["ret"].shift(-1)
+    return panel
+
+
 def exposure_by_week(weights: pd.DataFrame) -> pd.DataFrame:
     return weights.groupby("week")["w"].agg(
         long_gross=lambda s: float(s.clip(lower=0).sum()),
@@ -116,3 +139,91 @@ def test_plotly_weight_bubble_animation_writes_all_week_frames(tmp_path) -> None
     assert "2024-01-08" in html
     assert "2024-01-15" in html
     assert "C19" in html
+
+
+def test_xgboost_regime_detector_uses_chronological_train_test_split(monkeypatch) -> None:
+    captured = {}
+
+    class FakeXGBClassifier:
+        def __init__(self, **kwargs):
+            captured["params"] = kwargs
+
+        def fit(self, x, y, sample_weight=None):
+            captured["fit_weeks"] = list(x.index)
+            captured["fit_y"] = list(y)
+            return self
+
+        def predict_proba(self, x):
+            probs = np.tile(np.array([[0.15, 0.70, 0.15]]), (len(x), 1))
+            probs[np.asarray(x["mktmom_z"] > 0.25), :] = [0.10, 0.20, 0.70]
+            probs[np.asarray(x["mktmom_z"] < -0.25), :] = [0.70, 0.20, 0.10]
+            return probs
+
+        def predict(self, x):
+            return self.predict_proba(x).argmax(axis=1)
+
+    monkeypatch.setattr(stage14, "XGBClassifier", FakeXGBClassifier)
+
+    panel = sample_factor_panel_for_regime()
+    first_oos = pd.Timestamp("2023-03-13")
+    regime = stage14.build_regime_panel(panel, first_oos=first_oos, persist=False)
+
+    assert captured["fit_weeks"]
+    assert max(captured["fit_weeks"]) < first_oos
+    assert set(captured["fit_y"]) == {0, 1, 2}
+    assert {"train", "test"}.issubset(set(regime["split"]))
+
+    test_rows = regime[regime["week"] >= first_oos]
+    assert not test_rows.empty
+    prob_cols = ["p_RiskOff", "p_Neutral", "p_RiskOn"]
+    assert test_rows[prob_cols].notna().all().all()
+    np.testing.assert_allclose(test_rows[prob_cols].sum(axis=1).to_numpy(), 1.0, atol=1e-9)
+
+
+def test_neural_network_signal_uses_xgboost_regime_features_and_train_split(monkeypatch) -> None:
+    captured = {}
+
+    class FakeMLPRegressor:
+        def __init__(self, **kwargs):
+            captured["params"] = kwargs
+
+        def fit(self, x, y):
+            captured["fit_weeks"] = list(x.index)
+            captured["fit_columns"] = list(x.columns)
+            captured["fit_y"] = np.asarray(y)
+            return self
+
+        def predict(self, x):
+            return np.asarray(x["z_VolC"]) * 0.01 + np.asarray(x["p_RiskOn"]) * 0.02
+
+    monkeypatch.setattr(stage14, "MLPRegressor", FakeMLPRegressor)
+
+    panel = sample_factor_panel_for_regime()
+    for i, fac in enumerate(stage14.FACTOR_ORDER):
+        panel[f"z_{fac}"] = ((np.arange(len(panel)) + i) % 11 - 5) / 5
+    weeks = pd.Series(sorted(panel["week"].unique()))
+    regime = pd.DataFrame(
+        {
+            "week": weeks,
+            "p_RiskOff": np.where(np.arange(len(weeks)) % 3 == 0, 0.70, 0.10),
+            "p_Neutral": np.where(np.arange(len(weeks)) % 3 == 1, 0.70, 0.20),
+            "p_RiskOn": np.where(np.arange(len(weeks)) % 3 == 2, 0.70, 0.10),
+            "label": ["RiskOff", "Neutral", "RiskOn"] * 30,
+            "split": np.where(weeks >= pd.Timestamp("2023-03-13"), "test", "train"),
+        }
+    )
+
+    signal = stage14.build_neural_network_signal(
+        panel,
+        regime,
+        first_oos=pd.Timestamp("2023-03-13"),
+        persist=False,
+    )
+
+    assert captured["fit_weeks"]
+    assert max(captured["fit_weeks"]) < pd.Timestamp("2023-03-13")
+    assert set(["p_RiskOff", "p_Neutral", "p_RiskOn"]).issubset(captured["fit_columns"])
+    assert "z_VolC" in captured["fit_columns"]
+    assert np.isfinite(captured["fit_y"]).all()
+    assert not signal.empty
+    assert signal.loc[signal["week"] >= pd.Timestamp("2023-03-13"), "signal"].notna().all()
