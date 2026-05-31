@@ -983,7 +983,12 @@ def main() -> None:
     min_obs = 30
     drop_is = obs_counts[obs_counts < min_obs].index.tolist()
     zoo_is_fit = zoo_is.drop(columns=[c for c in drop_is if c in zoo_is.columns], errors="ignore")
-    zoo_is_fit = zoo_is_fit.apply(lambda c: c.fillna(c.mean()))
+    # Leakage-free gap fill: forward-fill interior gaps from PAST observations
+    # only; the column mean is used solely for unavoidable leading NaNs (no prior
+    # value exists to carry forward). The previous fillna(c.mean()) used the
+    # whole-window mean — including future weeks — to patch past gaps, which is
+    # mild look-ahead for sparse factors (TVLC, FunC).
+    zoo_is_fit = zoo_is_fit.apply(lambda c: c.ffill().fillna(c.mean()))
     rw_is = ret_wide.loc[IS_START:IS_END]
 
     print(f"\nGX IS ({IS_START.date()}→{IS_END.date()}, {len(zoo_is_fit)} weeks) "
@@ -994,7 +999,9 @@ def main() -> None:
 
     # ---- GX on full window ----
     zoo_full = zoo.loc[IS_START:OOS_END].copy()
-    zoo_full_fit = zoo_full.apply(lambda c: c.fillna(c.mean()))
+    # Leakage-free gap fill (see IS block above): ffill past obs, mean only for
+    # leading NaNs.
+    zoo_full_fit = zoo_full.apply(lambda c: c.ffill().fillna(c.mean()))
     rw_full = ret_wide.loc[IS_START:OOS_END]
 
     print(f"\nGX Full ({IS_START.date()}→{OOS_END.date()}, {len(zoo_full_fit)} weeks) "

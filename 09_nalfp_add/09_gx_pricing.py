@@ -1,5 +1,13 @@
 """09 — Giglio-Xiu (2021) three-pass factor pricing on the 5-year panel.
 
+.. deprecated::
+    This script uses a single cross-sectional regression (average returns on
+    betas) as a Fama-MacBeth shortcut, which produces incorrect standard errors.
+    Use ``09c_gx_pricing_full.py`` instead — it implements proper week-by-week
+    Fama-MacBeth with Newey-West standard errors, and is the source of every
+    GX t-statistic reported in RESULTS.md and the final report. This file is
+    retained only for historical comparison; do not use its λ̂ t-stats.
+
 Runs the same GX methodology as 08_nalfp/02_factor_pricing.py, but on the
 full 5-year backbone (T=184 IS weeks vs the prior T=24).  With T=184 the
 Bai-Ng IC_p2 criterion can reliably select up to K_max=7 hidden factors
@@ -372,6 +380,14 @@ def print_lambda_table(label: str, lam_obs: pd.DataFrame, lam_full: pd.DataFrame
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    import warnings
+    warnings.warn(
+        "09_gx_pricing.py uses a single-cross-section FMB shortcut with incorrect "
+        "standard errors. Use 09c_gx_pricing_full.py for proper week-by-week "
+        "Fama-MacBeth (the source of all reported GX t-stats).",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     man = json.loads((MAN_DIR / "universe_manifest.json").read_text())
     IS_START = pd.Timestamp(man["split"]["in_sample"][0])
     IS_END   = pd.Timestamp(man["split"]["in_sample"][1])

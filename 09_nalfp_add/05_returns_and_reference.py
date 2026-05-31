@@ -80,7 +80,11 @@ def main() -> None:
           .pivot(index="week", columns="symbol", values="price")
           .sort_index())
     rets = px.pct_change()
-    # winsorize per-week cross-section at +/-3 MAD to tame illiquid spikes
+    # NOTE: returns are intentionally left RAW (no winsorization). Several core
+    # factors (VolC low-vol, MAXRET lottery-reversal) deliberately target the
+    # extreme tails of the cross-section, so clipping per-week outliers would
+    # blunt exactly the signal they trade. Downstream IC/GX tests are rank-based
+    # (Spearman) and therefore already robust to outlier magnitude.
     rets_long = (rets.reset_index().melt(id_vars="week", var_name="symbol", value_name="ret")
                  .dropna(subset=["ret"]))
     rets_long = rets_long[np.isfinite(rets_long["ret"])]

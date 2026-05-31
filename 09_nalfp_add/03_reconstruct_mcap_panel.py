@@ -166,8 +166,13 @@ def supply_backfill(price: pd.Series, real_mcap_recent: pd.Series) -> pd.Series:
     t0 = implied.index.min()
     days = (implied.index - t0).days.to_numpy(dtype=float)
     b, a = np.polyfit(days, np.log(implied.to_numpy()), 1)
-    # clamp drift to a sane band: |growth| <= ~300%/yr to avoid blow-ups
-    b = float(np.clip(b, -0.03 / 30.0, 0.05))
+    # clamp the *per-day* log-supply drift to a sane annual band so backward
+    # extrapolation cannot blow up. The bounds are expressed per day:
+    #   lower = -3%/yr  -> -0.03/365   (supply shrinks slowly at most)
+    #   upper = +50%/yr ->  0.50/365   (emissions grow fast but not absurdly)
+    # NB: the previous upper bound of 0.05 was an unintended per-*day* cap
+    # (~1500%/yr) that allowed unrealistically steep early-period supply.
+    b = float(np.clip(b, -0.03 / 365.0, 0.50 / 365.0))
     all_days = (price.index - t0).days.to_numpy(dtype=float)
     supply = np.exp(a + b * all_days)
     supply = np.clip(supply, 1e-9, implied.max())

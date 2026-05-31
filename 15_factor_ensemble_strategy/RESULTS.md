@@ -74,6 +74,63 @@ the priced-risk sleeve.
 | BTC | -0.33 | -12.3% | 37.7% | -46.7% | 47% | 78 |
 
 
+## Baseline & ablation variants (audit Findings 5 & 6)
+
+The headline ensembles depend on two sets of hardcoded priors: the regime tilt in
+`regime_tilt()` and the priced-tilt cap. These baselines isolate each choice. All
+use the Sharpe Ensemble base allocation; only one knob changes at a time.
+
+OOS (79 weeks) net performance:
+
+| Strategy | Sharpe | AnnRet | AnnVol | MaxDD | Hit | Weeks |
+|---|---:|---:|---:|---:|---:|---:|
+| SE Priced-Tilt Off | +0.90 | +34.2% | 37.8% | -24.0% | 53% | 79 |
+| SE Priced-Tilt 5% cap | +0.87 | +31.8% | 36.8% | -24.4% | 52% | 79 |
+| SE No Regime Tilt | +0.80 | +27.9% | 35.1% | -25.6% | 51% | 79 |
+| MispricingM Only | +0.85 | +37.2% | 44.1% | -29.9% | 52% | 79 |
+
+
+- **SE Priced-Tilt Off / 5% cap** (Finding 6): the priced-risk sleeve is OOS-toxic
+  on its own (Priced Tilt book OOS Sharpe is negative above). Zeroing or shrinking
+  its cap shows how much it drags the ensemble. If "Priced-Tilt Off" beats the
+  headline SE, the sleeve should be cut, not just capped.
+- **SE No Regime Tilt** (Finding 5): replaces the regime-tilt multipliers with 1.0.
+  The gap vs the headline Sharpe Ensemble is the *measured* value added by regime
+  conditioning — not an assumed benefit.
+- **MispricingM Only**: the mispricing sub-book traded alone. Because the Sharpe
+  Ensemble already routes ~80% to MispricingM, this quantifies the single-factor
+  dependency the audit flagged.
+
+### Sharpe Ensemble sensitivity grid
+
+OOS Sharpe under regime-tilt on/off x priced-tilt cap. A headline that barely moves
+across this grid is robust to the priors; large swings are a fragility flag.
+
+| regime_tilt   |   priced_cap |   oos_sharpe |   oos_ann_return |   oos_max_dd |
+|:--------------|-------------:|-------------:|-----------------:|-------------:|
+| on            |         0.18 |     0.836591 |         0.299255 |    -0.247094 |
+| on            |         0.05 |     0.86591  |         0.318499 |    -0.244019 |
+| on            |         0    |     0.904567 |         0.34194  |    -0.239626 |
+| off           |         0.18 |     0.795781 |         0.279136 |    -0.256464 |
+| off           |         0.05 |     0.865285 |         0.320861 |    -0.248731 |
+| off           |         0    |     0.905224 |         0.345983 |    -0.244879 |
+
+## Activation & regime-tilt priors — derivation (audit Finding 5)
+
+The multipliers in `regime_tilt()` are economic priors, not fitted parameters.
+They are documented here so they are auditable rather than magic numbers:
+
+| Book | RiskOn lift | RiskOff lift | Rationale |
+|---|---|---|---|
+| mispricing | `+0.25*p_RiskOn` | `-0.10*p_RiskOff` | Mispricing reversals pay most when risk appetite is returning; trimmed slightly in risk-off when dispersion collapses. |
+| core_rank | none | `+0.35*p_RiskOff` | Low-vol / lottery-reversal rankers are defensive — lift them when the market de-risks. |
+| priced_tilt | `0.55 + 0.35*p_RiskOn` | (scales down) | Speculative beta/skew/crash premia are risk-on phenomena; the base 0.55 keeps the sleeve small by construction. |
+
+All multipliers are bounded and multiplied by a confidence term
+`0.5 + 0.5*max(p_state)`, so an unsure regime call pulls every book toward its base
+weight. The sensitivity grid above is the robustness check on these values: the
+"No Regime Tilt" column is the all-multipliers-equal-1.0 limit.
+
 ## Plots
 
 ![Cumulative returns](artifacts/figures/cumulative_returns.png)

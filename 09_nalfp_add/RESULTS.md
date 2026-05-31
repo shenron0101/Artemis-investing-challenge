@@ -188,6 +188,44 @@ short of first/second-order dominance over Bitcoin. **Smaller is better.**
 
 ---
 
+## ASD robustness: in-sample vs out-of-sample (audit Finding 4)
+
+The composite **MispricingM** is built from the factors that almost-stochastically
+dominate Bitcoin *on the full sample*. A fair objection (audit Finding 4) is that
+full-sample dominance peeks at the OOS window, so the selection is partly informed
+by data the strategy is later tested on. The table below re-runs the ASSD test
+(ε₂, risk-averse dominance) separately on the IS window, the full sample, and the
+OOS window so the reader can see whether dominance was already present in-sample.
+**Smaller ε₂ is better; ✓ means ε₂ ≤ 3.2% (ASSD-dominates BTC) in that window.**
+
+| Factor | IS ε₂ | IS ✓ | Full ε₂ | Full ✓ | OOS ε₂ | OOS ✓ |
+|---|---|---|---|---|---|---|
+| SMBC | 0.000 | ✓ | 0.031 | ✓ | 0.000 | ✓ |
+| MomC | 0.122 | ✗ | 0.208 | ✗ | 0.151 | ✗ |
+| VolC | 0.855 | ✗ | 1.000 | ✗ | 0.136 | ✗ |
+| NetMom | 0.733 | ✗ | 0.958 | ✗ | 0.330 | ✗ |
+| NetRel | 0.018 | ✓ | 0.026 | ✓ | 0.198 | ✗ |
+| RMOM1w | 0.000 | ✓ | 0.000 | ✓ | 0.000 | ✓ |
+| RMOM2w | 0.144 | ✗ | 0.003 | ✓ | 0.000 | ✓ |
+| RMOM4w | 0.315 | ✗ | 0.052 | ✗ | 0.000 | ✓ |
+| MAXRET | 0.024 | ✓ | 0.457 | ✗ | 0.488 | ✗ |
+| SPC1 | 1.000 | ✗ | 1.000 | ✗ | 1.000 | ✗ |
+| SPC2 | 0.837 | ✗ | 1.000 | ✗ | 0.332 | ✗ |
+| SPC3 | 0.998 | ✗ | 1.000 | ✗ | 0.696 | ✗ |
+| SPC4 | 0.647 | ✗ | 1.000 | ✗ | 0.549 | ✗ |
+| MispricingM | 0.000 | ✓ | 0.000 | ✓ | 0.000 | ✓ |
+
+**How to read it:** a factor whose ε₂ stays small in *both* the IS and OOS columns
+earned its place in MispricingM honestly — the dominance is not a full-sample
+artifact. A factor that only dominates in the full/OOS columns but not IS is a
+selection-robustness flag. The OOS column uses only ~80
+weeks, so its empirical CDF is noisier and ε₂ there should be read as indicative,
+not decisive. We keep the full-sample selection rule for MispricingM (it needs
+enough observations to estimate the CDF), but report all three windows rather than
+hiding the IS/OOS split.
+
+---
+
 ## MispricingM composite factor
 
 **Components:** SMBC, NetRel, RMOM1w, RMOM2w
@@ -229,10 +267,11 @@ where these same factors land as *Confirmed* (IC + priced-risk agree they are re
   deep history carries measurement error (see SURVIVORSHIP.md).
 - **OOS is only 80 weeks** — enough to catch a factor that
   completely collapses, but not enough to certify a small edge with high confidence.
-- **ASD is a full-sample test** (not IS/OOS split) because it needs a sufficient
-  number of observations to estimate the empirical CDF reliably.
-
----
+- **MispricingM's selection rule uses full-sample ASD** because the empirical CDF
+  needs enough observations to be reliable, but ASD is now *also reported* split by
+  IS and OOS window (see "ASD robustness" section) so the full-sample dependence is
+  transparent rather than hidden. The OOS ASD column is noisier (short window) and
+  is indicative only.
 
 ---
 

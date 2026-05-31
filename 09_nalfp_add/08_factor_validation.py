@@ -408,6 +408,14 @@ def main() -> None:
         btc_aligned = btc_aligned.reindex(fac_aligned.index)
         asd_full = compute_asd(fac_aligned.values, btc_aligned.values)
 
+        # ASD vs BTC over the IS window only (Finding 4: report IS/OOS separately
+        # so the reader can see whether ASD-dominance — used to pick MispricingM's
+        # components — was already present in-sample, not only full-sample).
+        btc_is  = btc_ret[(btc_ret.index >= is_lo) & (btc_ret.index <= is_hi)].dropna()
+        fac_is_asd = is_r.reindex(btc_is.index).dropna()
+        btc_is_asd = btc_is.reindex(fac_is_asd.index)
+        asd_is = compute_asd(fac_is_asd.values, btc_is_asd.values)
+
         btc_oos  = btc_ret[(btc_ret.index >= oos_lo) & (btc_ret.index <= oos_hi)].dropna()
         fac_oos_asd = oos_r.reindex(btc_oos.index).dropna()
         btc_oos_asd = btc_oos.reindex(fac_oos_asd.index)
@@ -431,6 +439,10 @@ def main() -> None:
             "afsd_dom_btc": asd_full["afsd_dominates"],
             "assd_dom_btc": asd_full["assd_dominates"],
             "afsd_dom_by_btc": asd_full["afsd_dominated_by"],
+            # ASD vs BTC (IS only)
+            "is_asd_eps1": asd_is["eps1_fwd"], "is_asd_eps2": asd_is["eps2_fwd"],
+            "is_afsd_dom": asd_is["afsd_dominates"],
+            "is_assd_dom": asd_is["assd_dominates"],
             # ASD vs BTC (OOS only)
             "oos_asd_eps1": asd_oos["eps1_fwd"], "oos_asd_eps2": asd_oos["eps2_fwd"],
             "oos_afsd_dom": asd_oos["afsd_dominates"],
@@ -458,6 +470,19 @@ def main() -> None:
         btc_asd2 = btc_asd.reindex(mis_asd_vals.index)
         mis_asd = compute_asd(mis_asd_vals.values, btc_asd2.values)
 
+        # IS-window ASD for the composite (Finding 4: is the dominance the
+        # selection relies on already present in-sample, or only full-sample?)
+        mism_is = mism[(mism.index >= is_lo) & (mism.index <= is_hi)]
+        btc_is_c = btc_ret[(btc_ret.index >= is_lo) & (btc_ret.index <= is_hi)].dropna()
+        mis_is_vals = mism_is.reindex(btc_is_c.index).dropna()
+        btc_is_c2 = btc_is_c.reindex(mis_is_vals.index)
+        mis_asd_is = compute_asd(mis_is_vals.values, btc_is_c2.values)
+        mism_oos = mism[(mism.index >= oos_lo) & (mism.index <= oos_hi)]
+        btc_oos_c = btc_ret[(btc_ret.index >= oos_lo) & (btc_ret.index <= oos_hi)].dropna()
+        mis_oos_vals = mism_oos.reindex(btc_oos_c.index).dropna()
+        btc_oos_c2 = btc_oos_c.reindex(mis_oos_vals.index)
+        mis_asd_oos = compute_asd(mis_oos_vals.values, btc_oos_c2.values)
+
         rows.append({
             "factor": "MispricingM", "group": "composite",
             "IS_n": mis_is["n"],   "IS_annret": mis_is["ann_ret"],
@@ -472,8 +497,12 @@ def main() -> None:
             "afsd_dom_btc": mis_asd["afsd_dominates"],
             "assd_dom_btc": mis_asd["assd_dominates"],
             "afsd_dom_by_btc": mis_asd["afsd_dominated_by"],
-            "oos_asd_eps1": np.nan, "oos_asd_eps2": np.nan,
-            "oos_afsd_dom": False, "oos_assd_dom": False,
+            "is_asd_eps1": mis_asd_is["eps1_fwd"], "is_asd_eps2": mis_asd_is["eps2_fwd"],
+            "is_afsd_dom": mis_asd_is["afsd_dominates"],
+            "is_assd_dom": mis_asd_is["assd_dominates"],
+            "oos_asd_eps1": mis_asd_oos["eps1_fwd"], "oos_asd_eps2": mis_asd_oos["eps2_fwd"],
+            "oos_afsd_dom": mis_asd_oos["afsd_dominates"],
+            "oos_assd_dom": mis_asd_oos["assd_dominates"],
             "verdict": "Composite (mispricing factor — equal-weight of ASD-dominant factors)",
         })
         stats = pd.DataFrame(rows)
@@ -562,6 +591,21 @@ def write_results_md(stats: pd.DataFrame, man: dict, dom_names: list) -> None:
         return (
             f"| {r['factor']} | {fmt(r['asd_eps1'], 3, False)} | "
             f"{fmt(r['asd_eps2'], 3, False)} | {afsd} | {assd} | {dom_by} |"
+        )
+
+    def row_asd_window(r):
+        def flags(prefix):
+            a = "✓" if r.get(f"{prefix}afsd_dom", False) else "✗"
+            s = "✓" if r.get(f"{prefix}assd_dom", False) else "✗"
+            return a, s
+        f_a = "✓" if r["afsd_dom_btc"] else "✗"
+        f_s = "✓" if r["assd_dom_btc"] else "✗"
+        is_a, is_s = flags("is_")
+        oos_a, oos_s = flags("oos_")
+        return (
+            f"| {r['factor']} | {fmt(r['is_asd_eps2'], 3, False)} | {is_s} | "
+            f"{fmt(r['asd_eps2'], 3, False)} | {f_s} | "
+            f"{fmt(r['oos_asd_eps2'], 3, False)} | {oos_s} |"
         )
 
     char_df = stats[stats.group == "characteristic"]
@@ -727,6 +771,33 @@ short of first/second-order dominance over Bitcoin. **Smaller is better.**
 
 ---
 
+## ASD robustness: in-sample vs out-of-sample (audit Finding 4)
+
+The composite **MispricingM** is built from the factors that almost-stochastically
+dominate Bitcoin *on the full sample*. A fair objection (audit Finding 4) is that
+full-sample dominance peeks at the OOS window, so the selection is partly informed
+by data the strategy is later tested on. The table below re-runs the ASSD test
+(ε₂, risk-averse dominance) separately on the IS window, the full sample, and the
+OOS window so the reader can see whether dominance was already present in-sample.
+**Smaller ε₂ is better; ✓ means ε₂ ≤ 3.2% (ASSD-dominates BTC) in that window.**
+
+| Factor | IS ε₂ | IS ✓ | Full ε₂ | Full ✓ | OOS ε₂ | OOS ✓ |
+|---|---|---|---|---|---|---|
+""" + "\n".join(
+    row_asd_window(r) for _, r in pd.concat([char_df, spc_df]).iterrows()
+) + (("\n" + row_asd_window(mis_df.iloc[0]) if len(mis_df) > 0 else "")) + f"""
+
+**How to read it:** a factor whose ε₂ stays small in *both* the IS and OOS columns
+earned its place in MispricingM honestly — the dominance is not a full-sample
+artifact. A factor that only dominates in the full/OOS columns but not IS is a
+selection-robustness flag. The OOS column uses only ~{man['split']['out_of_sample_weeks']}
+weeks, so its empirical CDF is noisier and ε₂ there should be read as indicative,
+not decisive. We keep the full-sample selection rule for MispricingM (it needs
+enough observations to estimate the CDF), but report all three windows rather than
+hiding the IS/OOS split.
+
+---
+
 ## MispricingM composite factor
 
 {"**Components:** " + ", ".join(dom_names) + """
@@ -781,8 +852,11 @@ where these same factors land as *Confirmed* (IC + priced-risk agree they are re
   deep history carries measurement error (see SURVIVORSHIP.md).
 - **OOS is only {man['split']['out_of_sample_weeks']} weeks** — enough to catch a factor that
   completely collapses, but not enough to certify a small edge with high confidence.
-- **ASD is a full-sample test** (not IS/OOS split) because it needs a sufficient
-  number of observations to estimate the empirical CDF reliably.
+- **MispricingM's selection rule uses full-sample ASD** because the empirical CDF
+  needs enough observations to be reliable, but ASD is now *also reported* split by
+  IS and OOS window (see "ASD robustness" section) so the full-sample dependence is
+  transparent rather than hidden. The OOS ASD column is noisier (short window) and
+  is indicative only.
 """
 
     # Preserve any Part 2+ sections written by downstream scripts (e.g. 09c_gx_pricing_full.py).

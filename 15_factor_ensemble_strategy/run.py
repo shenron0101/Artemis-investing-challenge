@@ -203,6 +203,9 @@ def regime_tilt(row: pd.Series) -> dict[str, float]:
     }
 
 
+PRICED_TILT_CAP = 0.18   # max share of book allocation the priced-risk sleeve may hold
+
+
 def rolling_book_allocations(
     book_returns: pd.DataFrame,
     regime: pd.DataFrame,
@@ -210,6 +213,8 @@ def rolling_book_allocations(
     lookback: int = BOOK_LOOKBACK,
     min_history: int = BOOK_MIN_HISTORY,
     base_alloc: dict[str, float] = BASE_BOOK_ALLOC,
+    use_regime_tilt: bool = True,
+    priced_cap: float = PRICED_TILT_CAP,
 ) -> pd.DataFrame:
     returns = book_returns.sort_values("week").reset_index(drop=True)
     regime_idx = regime.set_index("week")
@@ -228,11 +233,11 @@ def rolling_book_allocations(
                 book: (0.35 * float(base_alloc.get(book, 0.0)) + 0.65 * scores[book])
                 for book in books
             }
-        if wk in regime_idx.index:
+        if use_regime_tilt and wk in regime_idx.index:
             tilt = regime_tilt(regime_idx.loc[wk])
             raw = {book: raw[book] * tilt.get(book, 1.0) for book in books}
 
-        raw["priced_tilt"] = min(raw.get("priced_tilt", 0.0), 0.18 * sum(raw.values()))
+        raw["priced_tilt"] = min(raw.get("priced_tilt", 0.0), priced_cap * sum(raw.values()))
         total = sum(max(v, 0.0) for v in raw.values())
         if total <= 0:
             raw = {book: float(base_alloc.get(book, 0.0)) for book in books}
@@ -365,7 +370,12 @@ def write_results(
     allocations: dict[str, pd.DataFrame],
     bm: pd.DataFrame,
     first_oos: pd.Timestamp,
+    baselines: dict[str, pd.DataFrame] | None = None,
+    sensitivity: pd.DataFrame | None = None,
 ) -> None:
+    baselines = baselines or {}
+    baseline_oos = {name: perf_metrics(df[df["week"] >= first_oos]["pnl_net"]) for name, df in baselines.items()}
+    baseline_full = {name: perf_metrics(df["pnl_net"]) for name, df in baselines.items()}
     metrics = {
         **{name: perf_metrics(df["pnl_net"]) for name, df in variant_pnls.items()},
         **{name: perf_metrics(df["pnl_net"]) for name, df in book_pnls.items()},
@@ -435,6 +445,50 @@ the priced-risk sleeve.
 
 {metrics_table(oos_metrics)}
 
+## Baseline & ablation variants (audit Findings 5 & 6)
+
+The headline ensembles depend on two sets of hardcoded priors: the regime tilt in
+`regime_tilt()` and the priced-tilt cap. These baselines isolate each choice. All
+use the Sharpe Ensemble base allocation; only one knob changes at a time.
+
+OOS ({OOS_WEEKS} weeks) net performance:
+
+{metrics_table(baseline_oos)}
+
+- **SE Priced-Tilt Off / 5% cap** (Finding 6): the priced-risk sleeve is OOS-toxic
+  on its own (Priced Tilt book OOS Sharpe is negative above). Zeroing or shrinking
+  its cap shows how much it drags the ensemble. If "Priced-Tilt Off" beats the
+  headline SE, the sleeve should be cut, not just capped.
+- **SE No Regime Tilt** (Finding 5): replaces the regime-tilt multipliers with 1.0.
+  The gap vs the headline Sharpe Ensemble is the *measured* value added by regime
+  conditioning — not an assumed benefit.
+- **MispricingM Only**: the mispricing sub-book traded alone. Because the Sharpe
+  Ensemble already routes ~80% to MispricingM, this quantifies the single-factor
+  dependency the audit flagged.
+
+### Sharpe Ensemble sensitivity grid
+
+OOS Sharpe under regime-tilt on/off x priced-tilt cap. A headline that barely moves
+across this grid is robust to the priors; large swings are a fragility flag.
+
+{sensitivity.to_markdown(index=False) if sensitivity is not None else "n/a"}
+
+## Activation & regime-tilt priors — derivation (audit Finding 5)
+
+The multipliers in `regime_tilt()` are economic priors, not fitted parameters.
+They are documented here so they are auditable rather than magic numbers:
+
+| Book | RiskOn lift | RiskOff lift | Rationale |
+|---|---|---|---|
+| mispricing | `+0.25*p_RiskOn` | `-0.10*p_RiskOff` | Mispricing reversals pay most when risk appetite is returning; trimmed slightly in risk-off when dispersion collapses. |
+| core_rank | none | `+0.35*p_RiskOff` | Low-vol / lottery-reversal rankers are defensive — lift them when the market de-risks. |
+| priced_tilt | `0.55 + 0.35*p_RiskOn` | (scales down) | Speculative beta/skew/crash premia are risk-on phenomena; the base 0.55 keeps the sleeve small by construction. |
+
+All multipliers are bounded and multiplied by a confidence term
+`0.5 + 0.5*max(p_state)`, so an unsure regime call pulls every book toward its base
+weight. The sensitivity grid above is the robustness check on these values: the
+"No Regime Tilt" column is the all-multipliers-equal-1.0 limit.
+
 ## Plots
 
 ![Cumulative returns](artifacts/figures/cumulative_returns.png)
@@ -465,9 +519,15 @@ directly flipping every factor signal.
         "variant_base_allocs": VARIANT_BASE_ALLOCS,
         "book_lookback": BOOK_LOOKBACK,
         "book_min_history": BOOK_MIN_HISTORY,
+        "priced_tilt_cap": PRICED_TILT_CAP,
         "full": metrics,
         "is": is_metrics,
         "oos": oos_metrics,
+        "baselines_oos": baseline_oos,
+        "baselines_full": baseline_full,
+        "sharpe_ensemble_sensitivity": (
+            sensitivity.to_dict(orient="records") if sensitivity is not None else []
+        ),
     }
     (MANIFEST_OUT / "metrics.json").write_text(json.dumps(manifest, indent=2, default=str))
 
@@ -511,6 +571,51 @@ def main() -> None:
         allocations[variant] = allocation
         variant_pnls[variant] = pnl
 
+    # ---- audit Findings 5 & 6: baseline + ablation variants -----------------
+    # All reuse the Sharpe Ensemble base allocation so differences isolate one
+    # design choice at a time. The three headline variants above are untouched.
+    sharpe_base = VARIANT_BASE_ALLOCS["Sharpe Ensemble"]
+
+    def build_variant(base_alloc, *, use_regime_tilt=True, priced_cap=PRICED_TILT_CAP):
+        alloc = rolling_book_allocations(
+            book_returns, regime, base_alloc=base_alloc,
+            use_regime_tilt=use_regime_tilt, priced_cap=priced_cap,
+        )
+        w = combine_book_weights(subbook_weights, alloc)
+        return backtest_combined(w, panel)
+
+    print("Building baseline + ablation variants (Findings 5, 6)...", flush=True)
+    baselines = {
+        # Finding 6: how much does the Priced Tilt sleeve cost the ensemble?
+        "SE Priced-Tilt Off": build_variant(sharpe_base, priced_cap=0.0),
+        "SE Priced-Tilt 5% cap": build_variant(sharpe_base, priced_cap=0.05),
+        # Finding 5: value added by regime conditioning (vs no tilt at all)
+        "SE No Regime Tilt": build_variant(sharpe_base, use_regime_tilt=False),
+        # Single-factor-dependency baseline: the MispricingM book standalone
+        "MispricingM Only": book_pnls["mispricing"],
+    }
+    for name, pnl in baselines.items():
+        safe = name.lower().replace(" ", "_").replace("%", "pct")
+        pnl.to_csv(DATA_OUT / f"baseline_{safe}_weekly_pnl.csv", index=False)
+
+    # Sensitivity grid for the Sharpe Ensemble: OOS Sharpe under regime-tilt
+    # on/off x priced-tilt cap. Isolates how fragile the headline is to the two
+    # hardcoded-prior knobs the audit flagged.
+    sens_rows = []
+    for tilt_on in (True, False):
+        for cap in (0.18, 0.05, 0.0):
+            pnl = build_variant(sharpe_base, use_regime_tilt=tilt_on, priced_cap=cap)
+            oos = perf_metrics(pnl[pnl["week"] >= first_oos]["pnl_net"])
+            sens_rows.append({
+                "regime_tilt": "on" if tilt_on else "off",
+                "priced_cap": cap,
+                "oos_sharpe": oos["sharpe"],
+                "oos_ann_return": oos["ann_return"],
+                "oos_max_dd": oos["max_dd"],
+            })
+    sensitivity = pd.DataFrame(sens_rows)
+    sensitivity.to_csv(DATA_OUT / "sharpe_ensemble_sensitivity.csv", index=False)
+
     bm = benchmark_returns(panel)
     bm.to_csv(DATA_OUT / "benchmarks.csv", index=False)
     bm.to_parquet(DATA_OUT / "benchmarks.parquet", index=False)
@@ -519,7 +624,7 @@ def main() -> None:
     plot_cumulative(variant_pnls, book_pnls, bm, first_oos)
     for variant, allocation in allocations.items():
         plot_allocations(allocation, variant)
-    write_results(variant_pnls, book_pnls, allocations, bm, first_oos)
+    write_results(variant_pnls, book_pnls, allocations, bm, first_oos, baselines, sensitivity)
 
     for variant, pnl in variant_pnls.items():
         oos = perf_metrics(pnl[pnl["week"] >= first_oos]["pnl_net"])

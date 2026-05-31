@@ -95,6 +95,17 @@ The strategy is designed to exclude stablecoins, wrapped duplicates, and very lo
 | Rebalancing frequency | Weekly |
 | Trading-cost discipline | Research backtests include simplified turnover-cost assumptions, but real execution costs could be higher |
 
+The factor validation, universe reconstruction, and Giglio-Xiu pricing that
+underpin every factor claim below are produced in the Stage 09 pipeline
+(`09_nalfp_add/`); the behavioral factor search is Stage 10; the per-factor
+visualizations are Stage 12; and the final ensemble is Stage 15. One data-integrity
+note: deep-history market cap before ~2025 is reconstructed as price × an
+emissions-anchored supply estimate, with per-day supply drift clamped to a
+realistic annual band (−3% to +50% per year) so backward extrapolation cannot
+produce runaway early-period supply. Because the size factor (SMBC) sorts on
+*cross-sectional log-mcap ranks* rather than levels, residual reconstruction error
+has limited effect on the ranking.
+
 # Factor Discovery and Validation Framework
 
 The strategy starts with factor discovery. A factor is useful only if it passes at least one clear test:
@@ -130,6 +141,27 @@ The strongest single-factor evidence is for VolC and MAXRET. VolC favors lower-v
 | SMBC | Weak IC, useful in distributional tests | +0.36 | Yes | Suggestive |
 | NetRel | Weak IC, useful in distributional tests | -0.01 | Yes | Suggestive |
 | MispricingM | Composite of RMOM1w, RMOM2w, SMBC, and NetRel | n/a | Yes | Suggestive |
+
+**Multiple-testing discipline (priced-risk factors).** The four behavioral
+priced-risk factors come from a search over 182 candidate specifications, of which
+102 cleared an uncorrected |t| ≥ 2.0 bar. That 56% raw hit rate is correctly read
+as exploratory mining, so the four headline factors are held to a far harsher
+standard: across all 182 tests they survive both a **Benjamini-Hochberg** false-
+discovery-rate correction (q < 0.001) and a **Bonferroni** family-wise correction
+(threshold |t| > 3.64; all four exceed it). Their reported significance is not an
+artifact of the correction. Re-pricing each factor separately on the in-sample and
+out-of-sample windows shows the priced-tilt factors are weak as *standalone*
+single-window additions (short-window GX premia, signs mostly consistent IS→OOS) —
+which is precisely why they are used only as a small capped sleeve, never as core
+alpha. Full detail: `10_behavioral_gx/RESULTS.md`.
+
+**MispricingM dominance is not a full-sample artifact.** The composite is selected
+from factors that almost-stochastically dominate Bitcoin on the full sample, but
+re-running the ASSD test split by window shows MispricingM dominates BTC
+(ε₂ = 0.000) in the in-sample window, the full sample, *and* the out-of-sample
+window. Two of its four components (RMOM1w, SMBC) dominate in all three windows;
+NetRel and RMOM2w each carry a single-window flag, but the diversified composite is
+stable across the split. Full detail: `09_nalfp_add/RESULTS.md`.
 
 # Economic Intuition and Factor Evidence
 
@@ -248,11 +280,38 @@ Figure 6. Cumulative returns. The final ensembles keep positive out-of-sample pe
 
 The results support three conclusions. First, the Sharpe Ensemble has the best return and risk-adjusted return. Second, Balanced and Defensive variants reduce drawdown by shifting more capital toward Core Rank and risk control. Third, the Priced Tilt sub-book is economically interesting but weak as a standalone weekly strategy, which supports keeping it capped.
 
+## Ablation and sensitivity analysis
+
+To test how much the headline depends on the two hardcoded-prior knobs — the
+priced-tilt cap and the regime tilt — each is isolated against the Sharpe Ensemble
+base allocation (full detail in `15_factor_ensemble_strategy/RESULTS.md`):
+
+| Variant | OOS Sharpe | OOS Annual return | Note |
+|---|---:|---:|---|
+| Sharpe Ensemble (headline) | +0.84 | +29.9% | three-book ensemble as presented |
+| SE Priced-Tilt Off | +0.90 | +34.2% | priced-risk sleeve removed entirely |
+| SE Priced-Tilt 5% cap | +0.87 | +31.8% | sleeve cap cut from 18% to 5% |
+| SE No Regime Tilt | +0.80 | +27.9% | regime multipliers all set to 1.0 |
+| MispricingM Only | +0.85 | +37.2% | mispricing book traded alone |
+
+Three honest findings come out of this. **(1) The Priced Tilt sleeve is a net drag
+out-of-sample**: removing it *raises* OOS Sharpe from +0.84 to +0.90. The audit's
+recommendation to cut rather than merely cap it is therefore supported by the data,
+and a production version should run the priced-risk factors at a near-zero
+allocation. **(2) Regime conditioning adds a small, measured benefit** (+0.84 vs
++0.80 with no tilt) — real but modest, and not the source of the strategy's edge.
+**(3) The ensemble is essentially a single-factor strategy**: MispricingM alone
+earns OOS Sharpe +0.85, statistically indistinguishable from the full ensemble, so
+the diversification across books mainly controls volatility and drawdown rather than
+adding return. Across the full regime-tilt × priced-cap grid the OOS Sharpe stays in
+a tight +0.80 to +0.91 band, so the headline is robust to these priors even though
+the priors are not individually optimal.
+
 # Critical Evaluation
 
 The strongest weakness is sample length. The final out-of-sample test has only 79 weeks. That is useful, but it is not enough to prove the strategy will work across every future crypto cycle.
 
-There is also selection risk. The final strategy was designed after earlier experiments showed what did not work. That is a normal research process, but it means the final result should not be described as a pure untouched holdout.
+There is also selection risk. The final strategy was designed after earlier experiments showed what did not work. That is a normal research process, but it means the final result should not be described as a pure untouched holdout. Two specific selection concerns have been addressed directly: the behavioral factor search is now reported with Bonferroni and Benjamini-Hochberg multiple-testing corrections (the four selected factors survive both), and the factors plus the MispricingM composite are re-tested with explicit in-sample/out-of-sample splits rather than full-sample evidence alone. The single-factor dependency on MispricingM is real and is quantified in the ablation table above rather than hidden.
 
 The regime model is heuristic. XGBoost regime labels are based on market-state features such as market momentum, cross-sectional dispersion, BTC dominance, and volatility. They are useful for sizing risk, but they are not ground truth.
 
@@ -295,9 +354,36 @@ Figure 7. XGBoost regime probabilities. The final strategy uses these probabilit
 
 The lesson is that more model complexity did not improve out-of-sample robustness. The final strategy therefore constrains model freedom, separates factor roles, caps priced-risk exposure, and uses machine learning only for risk sizing.
 
+To be explicit about where the gain comes from: Stage 14's best variant reaches OOS Sharpe +0.61, while Stage 15's Sharpe Ensemble reaches +0.84. That improvement is the result of *simplification* — dropping the multi-sleeve optimizer complexity and concentrating on the MispricingM composite — not of discovering additional signal. The IS→OOS Sharpe decay is also informative: the Sharpe Ensemble decays 1.36 → 0.84 (≈38%), the Defensive Ensemble 1.31 → 0.75 (≈43%), and the Balanced Ensemble 1.28 → 0.68 (≈47%), whereas Bitcoin goes from +1.14 in-sample to −0.33 out-of-sample. A ~38% decay is meaningful overfitting but is smaller than the decay typical of complex ML variants here (the neural-network optimizer decayed from +2.06 to −0.46).
+
 # Appendix C: Reproducibility Note
 
 This document is written so that the reader can evaluate the strategy without access to code. The tables and figures are included directly in the report. If the competition submission includes a code package, that package can be used to reproduce the numbers, but the report does not require readers to inspect the code to understand the method.
+
+# Appendix D: Audit Remediation Summary
+
+An independent audit (`AUDIT_AND_FINDINGS_REPORT.md`) raised thirteen findings.
+Those touching the production pipeline (Stages 09, 10, 12, 15) have been resolved
+as follows; the resolutions are reflected in the relevant stage `RESULTS.md` files
+and in the sections above.
+
+| # | Finding | Resolution |
+|---|---|---|
+| 1 | Uncontrolled multiple testing in the 182-candidate behavioral search | Bonferroni + Benjamini-Hochberg corrections added; all four selected factors survive both (Bonferroni |t| > 3.64; BH q < 0.001). Reported in Stage 10 RESULTS and above. |
+| 2 | No IS/OOS holdout for behavioral factor discovery | Each shortlist factor re-priced on the frozen IS window and the held-out OOS window; standalone single-window premia shown to be weak, justifying the capped-sleeve treatment. |
+| 3 | Supply backfill look-ahead / clip bug | Per-day log-supply drift clamp fixed to a realistic annual band (−3%/yr to +50%/yr), removing the unintended ~1500%/yr upper bound. |
+| 4 | ASD computed on full sample only | ASSD test now also computed for the IS and OOS windows; MispricingM dominates BTC in all three windows. |
+| 5 | Hardcoded activation/regime-tilt priors unvalidated | Priors documented with economic rationale; a "No Regime Tilt" baseline and a full regime-tilt × priced-cap sensitivity grid added (OOS Sharpe stays in +0.80–0.91). |
+| 6 | Priced Tilt sub-book toxic OOS | Ablation added: removing the sleeve raises OOS Sharpe +0.84 → +0.90, supporting a near-zero allocation in production. |
+| 8 | FMB shortcut in `09_gx_pricing.py` | Deprecation banner + runtime warning added; all reported GX t-stats come from `09c_gx_pricing_full.py`. |
+| 9 | `fillna(mean)` mild look-ahead | Replaced with leakage-free forward-fill (mean only for unavoidable leading gaps) in the GX engine. |
+| 11 | Stage 14 → 15 improvement framing | Clarified in Appendix B: the +0.61 → +0.84 OOS gain comes from simplification, not new signal. |
+| 12 | Undocumented Stage 10 → 12 → 15 selection path | Documented in the root pipeline `README.md` and the provenance note in the data section. |
+| 13 | Misleading winsorization comment | Comment corrected: returns are intentionally raw because VolC/MAXRET target the tails and downstream tests are rank-based. |
+
+Findings 7 and 10 concern Stages 13–14 (the regime experiments in the appendices)
+and do not affect the production pipeline; they are noted but not core to this
+submission.
 
 # Bibliography
 

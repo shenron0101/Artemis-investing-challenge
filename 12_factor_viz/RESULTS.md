@@ -563,7 +563,12 @@ not an *alpha* bet — it describes a risk exposure, not a tradeable anomaly.
 - **FunC and TVLC** only cover ~37 symbols with TVL/fees data vs ~113 in the full
   universe — these results are less stable than price-based factors.
 - **The behavioral factor search tested 182 candidates** — the 102 individual hits
-  include many correlated variants. The final shortlist of 4 was jointly validated
-  to reduce multiple-testing concern.
+  at |t| ≥ 2.0 include many correlated variants and must be read as exploratory
+  mining. The final shortlist of 4 (CRASH8, BETA26, SKEW52, NEWC) was held to a
+  full multiple-testing correction across all 182 tests: all four survive both a
+  Benjamini-Hochberg FDR control (q < 0.001) and the harsher Bonferroni bar
+  (|t| > 3.64). They were additionally re-priced on separate in-sample and
+  out-of-sample windows. See `10_behavioral_gx/RESULTS.md` for the correction and
+  IS/OOS tables.
 - **Market cap data before ~2025 is partly estimated** (price × circulating supply),
   carrying measurement error for early history in size-based factors.

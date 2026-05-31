@@ -38,6 +38,7 @@
   },
   "book_lookback": 26,
   "book_min_history": 8,
+  "priced_tilt_cap": 0.18,
   "full": {
     "Sharpe Ensemble": {
       "ann_return": 0.646746099455059,
@@ -259,5 +260,125 @@
       "hit_rate": 0.47435897435897434,
       "weeks": 78
     }
-  }
+  },
+  "baselines_oos": {
+    "SE Priced-Tilt Off": {
+      "ann_return": 0.3419403540019927,
+      "ann_vol": 0.37801566592167396,
+      "sharpe": 0.904566622042706,
+      "max_dd": -0.2396263616813359,
+      "calmar": 1.4269730241813618,
+      "hit_rate": 0.5316455696202531,
+      "weeks": 79
+    },
+    "SE Priced-Tilt 5% cap": {
+      "ann_return": 0.31849881612336295,
+      "ann_vol": 0.36781965343440787,
+      "sharpe": 0.8659102719212362,
+      "max_dd": -0.24401857152856166,
+      "calmar": 1.3052236726419963,
+      "hit_rate": 0.5189873417721519,
+      "weeks": 79
+    },
+    "SE No Regime Tilt": {
+      "ann_return": 0.27913600401879207,
+      "ann_vol": 0.35076978584462076,
+      "sharpe": 0.7957812083120521,
+      "max_dd": -0.25646436094443326,
+      "calmar": 1.0884007547515382,
+      "hit_rate": 0.5063291139240507,
+      "weeks": 79
+    },
+    "MispricingM Only": {
+      "ann_return": 0.3724862730229004,
+      "ann_vol": 0.44080517151873916,
+      "sharpe": 0.8450133916068758,
+      "max_dd": -0.29859486628202225,
+      "calmar": 1.2474637546885614,
+      "hit_rate": 0.5189873417721519,
+      "weeks": 79
+    }
+  },
+  "baselines_full": {
+    "SE Priced-Tilt Off": {
+      "ann_return": 0.6790557570653756,
+      "ann_vol": 0.5320028316325583,
+      "sharpe": 1.2764138021249916,
+      "max_dd": -0.4554875130417868,
+      "calmar": 1.4908328716424735,
+      "hit_rate": 0.5374331550802139,
+      "weeks": 374
+    },
+    "SE Priced-Tilt 5% cap": {
+      "ann_return": 0.6595430624399917,
+      "ann_vol": 0.5187425274031688,
+      "sharpe": 1.2714266280454622,
+      "max_dd": -0.453315933082146,
+      "calmar": 1.454930246893561,
+      "hit_rate": 0.5347593582887701,
+      "weeks": 374
+    },
+    "SE No Regime Tilt": {
+      "ann_return": 0.6278244643765691,
+      "ann_vol": 0.4993440506884441,
+      "sharpe": 1.2572983767624535,
+      "max_dd": -0.45363170217559456,
+      "calmar": 1.3839960068168846,
+      "hit_rate": 0.5347593582887701,
+      "weeks": 374
+    },
+    "MispricingM Only": {
+      "ann_return": 0.7645926151484845,
+      "ann_vol": 0.6187880727795607,
+      "sharpe": 1.235629206157737,
+      "max_dd": -0.46551777080556933,
+      "calmar": 1.6424563423763008,
+      "hit_rate": 0.5401069518716578,
+      "weeks": 374
+    }
+  },
+  "sharpe_ensemble_sensitivity": [
+    {
+      "regime_tilt": "on",
+      "priced_cap": 0.18,
+      "oos_sharpe": 0.8365908156425645,
+      "oos_ann_return": 0.29925504446724244,
+      "oos_max_dd": -0.24709382520296896
+    },
+    {
+      "regime_tilt": "on",
+      "priced_cap": 0.05,
+      "oos_sharpe": 0.8659102719212362,
+      "oos_ann_return": 0.31849881612336295,
+      "oos_max_dd": -0.24401857152856166
+    },
+    {
+      "regime_tilt": "on",
+      "priced_cap": 0.0,
+      "oos_sharpe": 0.904566622042706,
+      "oos_ann_return": 0.3419403540019927,
+      "oos_max_dd": -0.2396263616813359
+    },
+    {
+      "regime_tilt": "off",
+      "priced_cap": 0.18,
+      "oos_sharpe": 0.7957812083120521,
+      "oos_ann_return": 0.27913600401879207,
+      "oos_max_dd": -0.25646436094443326
+    },
+    {
+      "regime_tilt": "off",
+      "priced_cap": 0.05,
+      "oos_sharpe": 0.8652852094241432,
+      "oos_ann_return": 0.32086135365130647,
+      "oos_max_dd": -0.24873094448498478
+    },
+    {
+      "regime_tilt": "off",
+      "priced_cap": 0.0,
+      "oos_sharpe": 0.9052239938426342,
+      "oos_ann_return": 0.3459831107891506,
+      "oos_max_dd": -0.2448787112144094
+    }
+  ]
 }
