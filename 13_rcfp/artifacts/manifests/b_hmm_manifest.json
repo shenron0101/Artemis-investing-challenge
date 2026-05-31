@@ -1,16 +1,33 @@
 {
   "regime_counts": {
-    "Neutral": 459
+    "Neutral": 225,
+    "RiskOff": 142,
+    "RiskOn": 92
   },
   "obs_cols": [
     "csd_z",
     "dbtc_z",
-    "netent_z",
     "mktmom_z"
   ],
   "n_states": 3,
   "min_train": 52,
   "refit_every": 4,
-  "final_transition_matrix": null,
+  "final_transition_matrix": [
+    [
+      0.7811511744082903,
+      0.21884882559170973,
+      6.578188067810646e-32
+    ],
+    [
+      0.09583833529413514,
+      0.7482710045123651,
+      0.15589066019349976
+    ],
+    [
+      0.013082027654442661,
+      0.17157006412468778,
+      0.8153479082208697
+    ]
+  ],
   "weeks": 459
 }

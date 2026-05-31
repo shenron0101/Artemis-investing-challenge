@@ -18,6 +18,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
 
 warnings.filterwarnings("ignore")
@@ -41,8 +42,13 @@ COST_BPS = 10.0
 MIN_NAMES = 14
 VOL_FLOOR = 0.05
 MAX_ASSET_WEIGHT = 0.08
+MAX_LONG_ASSET_WEIGHT = 0.20
+MAX_SHORT_ASSET_WEIGHT = 0.065
+LONG_WEIGHT_EXPONENT = 1.8
+SHORT_WEIGHT_EXPONENT = 1.1
 TURNOVER_CAP = 0.45
 HMM_STATES = ["RiskOff", "Neutral", "RiskOn"]
+LONG_SHARE_BY_REGIME = {"RiskOn": 0.90, "Neutral": 0.75, "RiskOff": 0.70}
 
 # The active factor set intentionally covers the factors called out in
 # 12_factor_viz/RESULTS.md. Unsupported factors are included with small base
@@ -429,41 +435,84 @@ def gross_for_week(candidate: Candidate, r: pd.Series) -> float:
     )
 
 
+def long_share_for_week(r: pd.Series) -> float:
+    return sum(float(r[f"p_{state}"]) * LONG_SHARE_BY_REGIME[state] for state in HMM_STATES)
+
+
+def leg_count(n_assets: int, top_frac: float, target: float, cap: float) -> int:
+    by_fraction = int(math.ceil(n_assets * top_frac))
+    by_capacity = int(math.ceil(target / cap)) if cap > 0 else by_fraction
+    return min(n_assets, max(1, by_fraction, by_capacity))
+
+
+def capped_positive_allocation(raw: pd.Series, target: float, cap: float) -> pd.Series:
+    raw = raw.replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(lower=0.0)
+    out = pd.Series(0.0, index=raw.index, dtype=float)
+    if target <= 0 or raw.empty:
+        return out
+
+    feasible_target = min(float(target), float(cap) * len(raw))
+    remaining = feasible_target
+    uncapped = list(raw.index)
+    while remaining > 1e-12 and uncapped:
+        scores = raw.loc[uncapped]
+        if scores.sum() <= 0:
+            scores = pd.Series(1.0, index=uncapped)
+        proposed = remaining * scores / scores.sum()
+        capped = proposed[proposed >= cap - 1e-12]
+        if capped.empty:
+            out.loc[uncapped] += proposed
+            remaining = 0.0
+            break
+        out.loc[capped.index] = cap
+        remaining -= cap * len(capped)
+        uncapped = [idx for idx in uncapped if idx not in set(capped.index)]
+
+    if remaining > 1e-9 and uncapped:
+        out.loc[uncapped] += remaining / len(uncapped)
+    return out
+
+
 def construct_weights(signal_panel: pd.DataFrame, regime: pd.DataFrame, candidate: Candidate) -> pd.DataFrame:
-    gross_map = regime.set_index("week").apply(lambda r: gross_for_week(candidate, r), axis=1)
+    regime_idx = regime.set_index("week")
+    gross_map = regime_idx.apply(lambda r: gross_for_week(candidate, r), axis=1)
+    long_share_map = regime_idx.apply(long_share_for_week, axis=1)
     previous = None
     rows = []
     for wk, g in signal_panel.groupby("week", sort=True):
         g = g.dropna(subset=["signal"]).copy()
         if len(g) < MIN_NAMES:
             continue
-        hi = g["signal"].quantile(1 - candidate.top_frac)
-        lo = g["signal"].quantile(candidate.top_frac)
+        gross = float(gross_map.get(wk, candidate.gross_neutral))
+        long_share = float(long_share_map.get(wk, LONG_SHARE_BY_REGIME["Neutral"]))
+        long_target = gross * long_share
+        short_target = gross * (1 - long_share)
+        long_n = leg_count(len(g), candidate.top_frac, long_target, MAX_LONG_ASSET_WEIGHT)
+        short_n = leg_count(len(g), candidate.top_frac, short_target, MAX_SHORT_ASSET_WEIGHT)
+
+        ordered = g.sort_values("signal")
+        long_symbols = ordered.tail(long_n)["symbol"]
+        short_symbols = ordered.head(short_n)["symbol"]
         g["side"] = 0
-        g.loc[g["signal"] >= hi, "side"] = 1
-        g.loc[g["signal"] <= lo, "side"] = -1
+        g.loc[g["symbol"].isin(long_symbols), "side"] = 1
+        g.loc[g["symbol"].isin(short_symbols), "side"] = -1
         if (g["side"] != 0).sum() == 0:
             continue
 
         g["w"] = 0.0
         vol = g["vol4"].fillna(g["vol4"].median()).clip(lower=VOL_FLOOR)
-        for side, target in [(1, 0.5), (-1, -0.5)]:
-            mask = g["side"] == side
-            if mask.sum() == 0:
-                continue
-            inv_vol = 1.0 / vol[mask]
-            g.loc[mask, "w"] = target * (inv_vol / inv_vol.sum()).to_numpy()
+        long_mask = g["side"] == 1
+        if long_mask.any():
+            threshold = g.loc[long_mask, "signal"].min()
+            raw = ((g.loc[long_mask, "signal"] - threshold + 1e-6) ** LONG_WEIGHT_EXPONENT) / vol[long_mask]
+            g.loc[long_mask, "w"] = capped_positive_allocation(raw, long_target, MAX_LONG_ASSET_WEIGHT).to_numpy()
 
-        # single-name cap, then renormalize each side.
-        g["w"] = g["w"].clip(lower=-MAX_ASSET_WEIGHT, upper=MAX_ASSET_WEIGHT)
-        for side, target in [(1, 0.5), (-1, -0.5)]:
-            mask = g["side"] == side
-            side_sum = g.loc[mask, "w"].sum()
-            if abs(side_sum) > 1e-12:
-                g.loc[mask, "w"] *= target / side_sum
+        short_mask = g["side"] == -1
+        if short_mask.any():
+            threshold = g.loc[short_mask, "signal"].max()
+            raw = ((threshold - g.loc[short_mask, "signal"] + 1e-6) ** SHORT_WEIGHT_EXPONENT) / vol[short_mask]
+            g.loc[short_mask, "w"] = -capped_positive_allocation(raw, short_target, MAX_SHORT_ASSET_WEIGHT).to_numpy()
 
-        gross = float(gross_map.get(wk, candidate.gross_neutral))
-        g["w"] = g["w"] * gross
         desired = g.set_index("symbol")["w"]
         if previous is not None:
             all_symbols = desired.index.union(previous.index)
@@ -495,6 +544,8 @@ def backtest(weights: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFrame:
             ).abs().sum()
         previous = current
         gross = float(current.abs().sum())
+        long_gross = float(current.clip(lower=0.0).sum())
+        short_gross = float(-current.clip(upper=0.0).sum())
         pnl_gross = float((g["w"] * g["fwd_ret"].fillna(0.0)).sum())
         cost = turnover * COST_BPS / 1e4
         rows.append(
@@ -505,6 +556,9 @@ def backtest(weights: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFrame:
                 "cost": cost,
                 "pnl_net": pnl_gross - cost,
                 "gross_exposure": gross,
+                "long_gross": long_gross,
+                "short_gross": short_gross,
+                "net_exposure": long_gross - short_gross,
                 "n_assets": int((g["w"].abs() > 0).sum()),
             }
         )
@@ -527,18 +581,18 @@ def run_candidate(
 def candidate_grid() -> list[Candidate]:
     specs = [
         # name, sleeves core/priced/mispricing/legacy, ic, top, gross on/neutral/off, slow boost
-        ("defensive_a", (0.55, 0.20, 0.20, 0.05), 0.75, 0.20, (0.85, 0.65, 0.40), 0.90),
-        ("defensive_b", (0.50, 0.20, 0.25, 0.05), 0.75, 0.30, (1.00, 0.75, 0.45), 0.90),
-        ("core_alpha_a", (0.45, 0.25, 0.25, 0.05), 0.75, 0.20, (1.00, 0.80, 0.50), 1.00),
-        ("core_alpha_b", (0.45, 0.20, 0.30, 0.05), 0.00, 0.30, (1.10, 0.85, 0.55), 1.00),
-        ("balanced_a", (0.35, 0.35, 0.25, 0.05), 0.75, 0.20, (1.15, 0.90, 0.55), 1.00),
-        ("balanced_b", (0.30, 0.35, 0.30, 0.05), 0.00, 0.30, (1.20, 0.90, 0.60), 1.00),
-        ("mispricing_a", (0.30, 0.25, 0.40, 0.05), 0.75, 0.20, (1.10, 0.85, 0.50), 1.00),
-        ("mispricing_b", (0.25, 0.25, 0.45, 0.05), 0.00, 0.30, (1.20, 0.90, 0.55), 1.00),
-        ("priced_a", (0.25, 0.50, 0.20, 0.05), 0.25, 0.20, (1.30, 1.00, 0.60), 1.15),
-        ("priced_b", (0.20, 0.55, 0.20, 0.05), 0.00, 0.30, (1.40, 1.05, 0.65), 1.20),
-        ("return_a", (0.20, 0.60, 0.15, 0.05), 0.00, 0.20, (1.55, 1.15, 0.70), 1.25),
-        ("return_b", (0.15, 0.65, 0.15, 0.05), 0.25, 0.30, (1.65, 1.20, 0.75), 1.30),
+        ("defensive_a", (0.55, 0.20, 0.20, 0.05), 0.75, 0.20, (0.80, 0.68, 0.48), 0.90),
+        ("defensive_b", (0.50, 0.20, 0.25, 0.05), 0.75, 0.30, (0.85, 0.72, 0.52), 0.90),
+        ("core_alpha_a", (0.45, 0.25, 0.25, 0.05), 0.75, 0.20, (0.92, 0.78, 0.55), 1.00),
+        ("core_alpha_b", (0.45, 0.20, 0.30, 0.05), 0.00, 0.30, (0.96, 0.82, 0.58), 1.00),
+        ("balanced_a", (0.35, 0.35, 0.25, 0.05), 0.75, 0.20, (1.00, 0.85, 0.60), 1.00),
+        ("balanced_b", (0.30, 0.35, 0.30, 0.05), 0.00, 0.30, (1.02, 0.88, 0.62), 1.00),
+        ("mispricing_a", (0.30, 0.25, 0.40, 0.05), 0.75, 0.20, (0.96, 0.82, 0.56), 1.00),
+        ("mispricing_b", (0.25, 0.25, 0.45, 0.05), 0.00, 0.30, (1.00, 0.86, 0.60), 1.00),
+        ("priced_a", (0.25, 0.50, 0.20, 0.05), 0.25, 0.20, (1.04, 0.90, 0.62), 1.15),
+        ("priced_b", (0.20, 0.55, 0.20, 0.05), 0.00, 0.30, (1.08, 0.94, 0.65), 1.20),
+        ("return_a", (0.20, 0.60, 0.15, 0.05), 0.00, 0.20, (1.10, 0.96, 0.66), 1.25),
+        ("return_b", (0.15, 0.65, 0.15, 0.05), 0.25, 0.30, (1.12, 0.98, 0.68), 1.30),
     ]
     rows = []
     for name, sleeves, ic_blend, top_frac, gross, slow_boost in specs:
@@ -713,6 +767,108 @@ def plot_oos_return_hist(selected_pnl: dict[str, pd.DataFrame], first_oos: pd.Ti
     plt.close()
 
 
+def write_weight_bubble_animation(
+    weights: pd.DataFrame,
+    regime: pd.DataFrame,
+    out_path: Path,
+    variant_name: str,
+) -> None:
+    anim = weights.copy()
+    anim = anim[anim["w"].abs() > 1e-12].copy()
+    anim["week"] = pd.to_datetime(anim["week"])
+    anim["week_frame"] = anim["week"].dt.strftime("%Y-%m-%d")
+    anim["weight_pct"] = anim["w"] * 100
+    anim["abs_weight"] = anim["w"].abs()
+    anim["side_name"] = np.where(anim["w"] >= 0, "Long", "Short")
+    anim["rank"] = anim.groupby("week")["w"].rank(method="first", ascending=True)
+    regime_cols = regime[["week", "label"]].copy()
+    regime_cols["week"] = pd.to_datetime(regime_cols["week"])
+    anim = anim.merge(regime_cols, on="week", how="left")
+
+    fig = px.scatter(
+        anim.sort_values(["week", "w"]),
+        x="weight_pct",
+        y="rank",
+        size="abs_weight",
+        color="side_name",
+        animation_frame="week_frame",
+        hover_name="symbol",
+        hover_data={
+            "weight_pct": ":.2f",
+            "signal": ":.3f",
+            "label": True,
+            "rank": False,
+            "abs_weight": False,
+            "side_name": False,
+            "week_frame": False,
+        },
+        color_discrete_map={"Long": "#2e7d32", "Short": "#b23a48"},
+        size_max=42,
+        title=f"{variant_name} Weekly Coin Weights",
+        labels={"weight_pct": "Portfolio weight (%)", "rank": "Coin weight rank"},
+    )
+    fig.add_vline(x=0, line_width=1, line_dash="dash", line_color="#333333")
+    fig.update_layout(
+        template="plotly_white",
+        xaxis_tickformat=".1f",
+        yaxis_showticklabels=False,
+        legend_title_text="Side",
+        margin=dict(l=50, r=30, t=80, b=50),
+    )
+    fig.write_html(out_path, include_plotlyjs=True, full_html=True)
+
+
+def exposure_table(selected_pnl: dict[str, pd.DataFrame], selected_weights: dict[str, pd.DataFrame]) -> str:
+    rows = []
+    for name, pnl in selected_pnl.items():
+        gross = pnl["gross_exposure"].replace(0, np.nan)
+        max_short = selected_weights[name].loc[selected_weights[name]["w"] < 0, "w"].abs().max()
+        rows.append(
+            {
+                "Variant": name,
+                "Avg Long": pnl["long_gross"].mean(),
+                "Avg Short": pnl["short_gross"].mean(),
+                "Avg Gross": pnl["gross_exposure"].mean(),
+                "Avg Net": pnl["net_exposure"].mean(),
+                "Long Share": (pnl["long_gross"] / gross).mean(),
+                "Max Short Name": max_short,
+            }
+        )
+    t = pd.DataFrame(rows)
+    for c in ["Avg Long", "Avg Short", "Avg Gross", "Avg Net", "Long Share", "Max Short Name"]:
+        t[c] = t[c].map(lambda x: f"{x:.1%}" if np.isfinite(x) else "n/a")
+    return t.to_markdown(index=False)
+
+
+def regime_exposure_table(selected_pnl: dict[str, pd.DataFrame], regime: pd.DataFrame) -> str:
+    regime_cols = regime[["week", "label"]].copy()
+    regime_cols["week"] = pd.to_datetime(regime_cols["week"])
+    rows = []
+    for name, pnl in selected_pnl.items():
+        x = pnl.merge(regime_cols, on="week", how="left")
+        x["long_share"] = x["long_gross"] / x["gross_exposure"].replace(0, np.nan)
+        grouped = x.groupby("label")
+        for label in HMM_STATES:
+            if label not in grouped.groups:
+                continue
+            g = grouped.get_group(label)
+            rows.append(
+                {
+                    "Variant": name,
+                    "Regime": label,
+                    "Weeks": len(g),
+                    "Avg Gross": g["gross_exposure"].mean(),
+                    "Avg Long": g["long_gross"].mean(),
+                    "Avg Short": g["short_gross"].mean(),
+                    "Long Share": g["long_share"].mean(),
+                }
+            )
+    t = pd.DataFrame(rows)
+    for c in ["Avg Gross", "Avg Long", "Avg Short", "Long Share"]:
+        t[c] = t[c].map(lambda x: f"{x:.1%}" if np.isfinite(x) else "n/a")
+    return t.to_markdown(index=False)
+
+
 def write_results(
     selected_names: dict[str, str],
     selected_candidates: dict[str, Candidate],
@@ -768,6 +924,14 @@ def write_results(
     top_grid = all_results.sort_values("is_sharpe", ascending=False).head(8)[
         ["candidate", "is_sharpe", "is_ann_return", "is_max_dd", "oos_sharpe", "oos_ann_return", "oos_max_dd"]
     ]
+    animation_variant = next(iter(selected_weights))
+    animation_path = FIG_OUT / "weekly_weight_bubbles.html"
+    write_weight_bubble_animation(
+        selected_weights[animation_variant],
+        regime,
+        animation_path,
+        variant_name=animation_variant,
+    )
 
     def params_md() -> str:
         head = "| Variant | Candidate | Core | Priced | Mispricing | Legacy | IC blend | Top frac | Gross R/N/O |\n|---|---|---:|---:|---:|---:|---:|---:|---|\n"
@@ -804,9 +968,11 @@ Generated by `14_regime_factor_strategy/run.py`.
 
 Evaluation uses the same weekly panel as the factor research. The optimizer uses
 the period before `{first_oos:%Y-%m-%d}` as in-sample, and the final {OOS_WEEKS}
-weeks as out-of-sample. The strategy is weekly rebalanced, dollar-neutral,
-inverse-vol weighted inside long/short legs, turnover capped, and charged
-{COST_BPS:.0f} bps per unit one-way turnover.
+weeks as out-of-sample. The strategy is weekly rebalanced, long-biased,
+nonlinearly score-weighted inside long/short legs, turnover capped, and charged
+{COST_BPS:.0f} bps per unit one-way turnover. Regime targets use about 90/10
+long/short gross in RiskOn, 75/25 in Neutral, and 70/30 with lower total gross
+in RiskOff.
 
 ## Factor Inputs
 
@@ -866,6 +1032,18 @@ winner repeated three times:
 
 {metrics_table(oos_metrics)}
 
+## Portfolio Exposure
+
+The strategy now expresses most conviction through longs. Shorts are smaller,
+capped at {MAX_SHORT_ASSET_WEIGHT:.1%} per name before turnover smoothing, and
+mainly act as a hedge sleeve that grows in RiskOff while total gross falls.
+
+{exposure_table(selected_pnl, selected_weights)}
+
+Average exposure by hard HMM regime:
+
+{regime_exposure_table(selected_pnl, regime)}
+
 ## Plots
 
 ![Cumulative returns](artifacts/figures/cumulative_returns.png)
@@ -873,6 +1051,9 @@ winner repeated three times:
 ![Drawdowns](artifacts/figures/drawdowns.png)
 
 ![OOS return histogram](artifacts/figures/oos_return_hist.png)
+
+Interactive weekly coin-weight bubble animation:
+[`artifacts/figures/weekly_weight_bubbles.html`](artifacts/figures/weekly_weight_bubbles.html)
 
 ## Average Factor Weights
 
@@ -905,6 +1086,7 @@ activation and IC blending. It is not portfolio asset weight.
 - `artifacts/data/selected_parameters.csv`
 - `artifacts/data/average_factor_weights.csv`
 {selected_weight_files}
+- `artifacts/figures/weekly_weight_bubbles.html`
 - `artifacts/manifests/metrics.json`
 
 ## Caveats
@@ -923,6 +1105,10 @@ regime-aware weekly portfolio.
         "full": full_metrics,
         "is": is_metrics,
         "oos": oos_metrics,
+        "long_share_by_regime": LONG_SHARE_BY_REGIME,
+        "max_long_asset_weight": MAX_LONG_ASSET_WEIGHT,
+        "max_short_asset_weight": MAX_SHORT_ASSET_WEIGHT,
+        "weight_bubble_animation": str(animation_path.relative_to(STAGE)),
     }
     (MANIFEST_OUT / "metrics.json").write_text(json.dumps(metrics, indent=2, default=str))
 

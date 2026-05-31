@@ -10,13 +10,19 @@ persistence from data instead of using hand-set thresholds.
 Observation vector (all lagged 1 week, 52w rolling z-scored):
   1. csd_z      cross-sectional dispersion of weekly returns (factor viability)
   2. dbtc_z     4-week BTC-dominance change       (flight-to-quality direction)
-  3. netent_z   Louvain network entropy           (correlation-structure regime)
-  4. mktmom_z   4-week equal-weight market return  (risk-on/off level)
+  3. mktmom_z   4-week equal-weight market return  (risk-on/off level)
 
-  Note: the original design listed `stable_inflow_z` as the 4th signal, but the
+  Note 1: the original design listed `stable_inflow_z` as a signal, but the
   5-year panel does not carry stablecoin flows (Stage-06 characteristics were
   never materialised on disk). `mktmom_z` is the crypto-native substitute — a
   direct risk-on/off level proxy with independent data lineage.
+
+  Note 2: the original design also listed `netent_z` (Louvain network entropy)
+  as a 4th signal. It is DROPPED here: `network_panel.parquet` only covers ~52
+  weeks, and after a rolling-52 z-score + 1-week lag only ~30 valid weeks
+  survive — far below MIN_TRAIN=52, so the HMM never fit and every week
+  collapsed to the default Neutral label. The remaining three signals all span
+  the full 5-year panel.
 
 Causality: the HMM is refit on an expanding window every REFIT_EVERY weeks and
 the FILTERED posterior at the last observation is taken (smoothed == filtered at
@@ -37,13 +43,17 @@ from hmmlearn.hmm import GaussianHMM
 
 import _rcfp_common as C
 
-OBS_COLS = ["csd_z", "dbtc_z", "netent_z", "mktmom_z"]
+OBS_COLS = ["csd_z", "dbtc_z", "mktmom_z"]
 N_STATES = 3
 MIN_TRAIN = 52
 REFIT_EVERY = 4
-N_ITER = 200
+N_ITER = 300
+COV_TYPE = "diag"              # diag resists the degenerate full-cov solution where
+                              # all states share one mean and differ only by covariance
 SEEDS = [0, 7, 21, 42, 99]      # multi-start to dodge degenerate local optima
 MAX_OCCUPANCY = 0.85            # reject fits where one state swallows > 85% of weeks
+MIN_MEAN_SPREAD = 0.30         # reject fits whose state means are not separated (the
+                              # degenerate collapse that produced an all-Neutral panel)
 
 warnings.filterwarnings("ignore")
 
@@ -52,7 +62,6 @@ def build_obs() -> pd.DataFrame:
     """Assemble the lagged, z-scored 4-signal observation panel."""
     rets = C.load_returns()
     mcap = C.load_mcap()
-    net = C.load_network()
 
     csd = rets.groupby("week")["ret"].std().rename("csd")
     mkt = rets.groupby("week")["ret"].mean().rename("mkt_ret")
@@ -63,14 +72,11 @@ def build_obs() -> pd.DataFrame:
     dom["btc_dom"] = dom["btc_mcap"] / dom["tot_mcap"]
     dbtc = (dom["btc_dom"] - dom["btc_dom"].shift(4)).rename("dbtc_dom")
 
-    netent = net.groupby("week")["network_entropy"].first().rename("netent")
-
-    obs = pd.concat([csd, mkt, dbtc, netent], axis=1).sort_index()
+    obs = pd.concat([csd, mkt, dbtc], axis=1).sort_index()
     obs["mktmom"] = obs["mkt_ret"].rolling(4, min_periods=2).sum()
 
     obs["csd_z"] = C.rolling_z(obs["csd"])
     obs["dbtc_z"] = C.rolling_z(obs["dbtc_dom"])
-    obs["netent_z"] = C.rolling_z(obs["netent"])
     obs["mktmom_z"] = C.rolling_z(obs["mktmom"])
 
     # lag one week so the regime at t uses information through t-1
@@ -82,15 +88,19 @@ def build_obs() -> pd.DataFrame:
 
 def _fit_hmm(X: np.ndarray) -> GaussianHMM | None:
     """Multi-start Gaussian HMM fit. Among converged fits, keep the one with the
-    highest log-likelihood whose Viterbi path is NOT degenerate (no single state
-    above MAX_OCCUPANCY). Falls back to the best-scoring fit if all degenerate."""
+    highest log-likelihood that is NOT degenerate: no single state above
+    MAX_OCCUPANCY *and* state means separated by at least MIN_MEAN_SPREAD on some
+    feature. The mean-separation guard is essential — with rich covariances the EM
+    can reach a higher likelihood by collapsing all state means together and
+    explaining everything through covariance, which yields a uniform posterior and
+    an all-Neutral panel. Falls back to the best-scoring fit if all degenerate."""
     best, best_score = None, -np.inf
     best_any, best_any_score = None, -np.inf
     for seed in SEEDS:
         try:
-            m = GaussianHMM(n_components=N_STATES, covariance_type="full",
-                            n_iter=N_ITER, random_state=seed, tol=1e-3,
-                            min_covar=1e-3)
+            m = GaussianHMM(n_components=N_STATES, covariance_type=COV_TYPE,
+                            n_iter=N_ITER, random_state=seed, tol=1e-4,
+                            min_covar=1e-4)
             m.fit(X)
             score = m.score(X)
         except Exception:
@@ -99,16 +109,19 @@ def _fit_hmm(X: np.ndarray) -> GaussianHMM | None:
             best_any, best_any_score = m, score
         path = m.predict(X)
         occ = np.bincount(path, minlength=N_STATES).max() / len(path)
-        if occ <= MAX_OCCUPANCY and score > best_score:
+        mean_spread = float(m.means_.std(axis=0).max())
+        ok = occ <= MAX_OCCUPANCY and mean_spread >= MIN_MEAN_SPREAD
+        if ok and score > best_score:
             best, best_score = m, score
     return best if best is not None else best_any
 
 
 def _label_states(model: GaussianHMM) -> dict[int, str]:
     """Map HMM state index -> regime label using economic risk-score of means.
-    risk = mktmom_z + csd_z - dbtc_z  (high => risk-on)."""
+    risk = mktmom_z + csd_z - dbtc_z  (high => risk-on).
+    Column order is OBS_COLS = [csd_z, dbtc_z, mktmom_z]."""
     means = model.means_  # (n_states, n_features) in OBS_COLS order
-    risk = means[:, 3] + means[:, 0] - means[:, 1]
+    risk = means[:, 2] + means[:, 0] - means[:, 1]
     order = np.argsort(risk)  # ascending: lowest risk first
     mapping = {int(order[0]): "RiskOff",
                int(order[1]): "Neutral",

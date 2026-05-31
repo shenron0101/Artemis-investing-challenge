@@ -47,8 +47,10 @@ def fig_cumulative(series: dict, first_oos) -> go.Figure:
         cum = (1 + s).cumprod()
         fig.add_trace(go.Scatter(x=cum.index, y=cum.values, name=name,
                                  line=dict(color=color, width=2)))
-    fig.add_vline(x=first_oos.strftime("%Y-%m-%d"), line_dash="dash",
-                  line_color="#999", annotation_text="IS / OOS")
+    fig.add_shape(type="line", x0=first_oos, x1=first_oos, y0=0, y1=1,
+                  yref="paper", line=dict(color="#999", dash="dash"))
+    fig.add_annotation(x=first_oos, y=1, yref="paper", showarrow=False,
+                       text="IS / OOS", xanchor="left")
     fig.update_layout(template=PLOTLY_TEMPLATE, height=560,
                       title="RCFP cumulative net return vs benchmarks (log scale)",
                       yaxis_type="log", xaxis_title="Week",
