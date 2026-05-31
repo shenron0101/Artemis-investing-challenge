@@ -24,19 +24,21 @@ warm-up. For week `t`, it scores only returns from weeks `< t`, blends that scor
 with a conservative base allocation, applies a regime confidence tilt, and caps
 the priced-risk sleeve.
 
-Average allocation:
+## Ensemble Modes
 
-| Book        | Average Allocation   |
-|:------------|:---------------------|
-| mispricing  | 54.8%                |
-| core_rank   | 36.7%                |
-| priced_tilt | 8.5%                 |
+| Variant            | mispricing   | core_rank   | priced_tilt   |
+|:-------------------|:-------------|:------------|:--------------|
+| Sharpe Ensemble    | 80.8%        | 15.3%       | 3.9%          |
+| Balanced Ensemble  | 54.8%        | 36.7%       | 8.5%          |
+| Defensive Ensemble | 60.4%        | 35.7%       | 3.9%          |
 
 ## Full-Window Performance
 
 | Strategy | Sharpe | AnnRet | AnnVol | MaxDD | Hit | Weeks |
 |---|---:|---:|---:|---:|---:|---:|
-| Stage 15 Ensemble | +1.18 | +51.1% | 43.4% | -41.4% | 54% | 374 |
+| Sharpe Ensemble | +1.27 | +64.7% | 51.1% | -45.3% | 53% | 374 |
+| Balanced Ensemble | +1.18 | +51.1% | 43.4% | -41.4% | 54% | 374 |
+| Defensive Ensemble | +1.21 | +54.4% | 45.0% | -42.4% | 53% | 374 |
 | mispricing | +1.24 | +76.5% | 61.9% | -46.6% | 54% | 374 |
 | core_rank | +0.53 | +18.5% | 35.1% | -49.3% | 49% | 374 |
 | priced_tilt | +0.30 | +11.1% | 36.9% | -49.1% | 47% | 374 |
@@ -48,7 +50,9 @@ Average allocation:
 
 | Strategy | Sharpe | AnnRet | AnnVol | MaxDD | Hit | Weeks |
 |---|---:|---:|---:|---:|---:|---:|
-| Stage 15 Ensemble | +1.28 | +59.7% | 46.7% | -41.4% | 55% | 295 |
+| Sharpe Ensemble | +1.36 | +74.0% | 54.4% | -45.3% | 54% | 295 |
+| Balanced Ensemble | +1.28 | +59.7% | 46.7% | -41.4% | 55% | 295 |
+| Defensive Ensemble | +1.31 | +63.2% | 48.4% | -42.4% | 53% | 295 |
 | mispricing | +1.32 | +87.0% | 65.8% | -46.6% | 55% | 295 |
 | core_rank | +0.60 | +23.0% | 38.3% | -49.3% | 49% | 295 |
 | priced_tilt | +0.47 | +17.8% | 38.2% | -49.1% | 49% | 295 |
@@ -60,7 +64,9 @@ Average allocation:
 
 | Strategy | Sharpe | AnnRet | AnnVol | MaxDD | Hit | Weeks |
 |---|---:|---:|---:|---:|---:|---:|
-| Stage 15 Ensemble | +0.68 | +18.8% | 27.6% | -18.3% | 53% | 79 |
+| Sharpe Ensemble | +0.84 | +29.9% | 35.8% | -24.7% | 51% | 79 |
+| Balanced Ensemble | +0.68 | +18.8% | 27.6% | -18.3% | 53% | 79 |
+| Defensive Ensemble | +0.75 | +21.6% | 29.0% | -19.7% | 53% | 79 |
 | mispricing | +0.85 | +37.2% | 44.1% | -29.9% | 52% | 79 |
 | core_rank | +0.11 | +2.0% | 18.1% | -18.8% | 47% | 79 |
 | priced_tilt | -0.43 | -13.7% | 31.8% | -32.6% | 39% | 79 |
@@ -72,13 +78,13 @@ Average allocation:
 
 ![Cumulative returns](artifacts/figures/cumulative_returns.png)
 
-![Book allocations](artifacts/figures/book_allocations.png)
+![Sharpe allocations](artifacts/figures/sharpe_ensemble_book_allocations.png)
+
+![Balanced allocations](artifacts/figures/balanced_ensemble_book_allocations.png)
 
 ## Artifacts
 
-- `artifacts/data/book_allocations.parquet`
-- `artifacts/data/ensemble_weekly_pnl.parquet`
-- `artifacts/data/ensemble_weekly_weights.parquet`
+- `artifacts/data/*_book_allocations.parquet`
 - `artifacts/data/*_weekly_pnl.parquet`
 - `artifacts/data/*_weekly_weights.parquet`
 - `artifacts/manifests/metrics.json`

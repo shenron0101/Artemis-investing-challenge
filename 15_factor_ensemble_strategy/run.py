@@ -42,6 +42,11 @@ BOOK_LOOKBACK = 26
 BOOK_MIN_HISTORY = 8
 BOOK_NAMES = ["mispricing", "core_rank", "priced_tilt"]
 BASE_BOOK_ALLOC = {"mispricing": 0.55, "core_rank": 0.35, "priced_tilt": 0.10}
+VARIANT_BASE_ALLOCS = {
+    "Sharpe Ensemble": {"mispricing": 0.92, "core_rank": 0.08, "priced_tilt": 0.00},
+    "Balanced Ensemble": BASE_BOOK_ALLOC,
+    "Defensive Ensemble": {"mispricing": 0.65, "core_rank": 0.35, "priced_tilt": 0.00},
+}
 
 
 def load_stage14():
@@ -312,13 +317,19 @@ def metrics_table(metrics: dict[str, dict]) -> str:
     return header + body
 
 
-def plot_cumulative(pnl: pd.DataFrame, book_pnls: dict[str, pd.DataFrame], bm: pd.DataFrame, first_oos: pd.Timestamp) -> None:
+def plot_cumulative(
+    variant_pnls: dict[str, pd.DataFrame],
+    book_pnls: dict[str, pd.DataFrame],
+    bm: pd.DataFrame,
+    first_oos: pd.Timestamp,
+) -> None:
     plt.figure(figsize=(12, 7))
-    curve = (1 + pnl.sort_values("week").set_index("week")["pnl_net"]).cumprod()
-    plt.plot(curve.index, curve.values, linewidth=2.4, label="Stage 15 Ensemble")
+    for name, pnl in variant_pnls.items():
+        curve = (1 + pnl.sort_values("week").set_index("week")["pnl_net"]).cumprod()
+        plt.plot(curve.index, curve.values, linewidth=2.2, label=name)
     for name, df in book_pnls.items():
         c = (1 + df.sort_values("week").set_index("week")["pnl_net"]).cumprod()
-        plt.plot(c.index, c.values, linewidth=1.3, alpha=0.75, label=name)
+        plt.plot(c.index, c.values, linewidth=1.0, alpha=0.45, label=name)
     for col, style in [("EW Market", "--"), ("BTC", ":")]:
         s = bm.dropna(subset=[col]).sort_values("week").set_index("week")[col]
         plt.plot(s.index, (1 + s).cumprod(), linestyle=style, linewidth=1.4, label=col)
@@ -333,37 +344,38 @@ def plot_cumulative(pnl: pd.DataFrame, book_pnls: dict[str, pd.DataFrame], bm: p
     plt.close()
 
 
-def plot_allocations(allocation: pd.DataFrame) -> None:
+def plot_allocations(allocation: pd.DataFrame, name: str) -> None:
     a = allocation.sort_values("week")
     plt.figure(figsize=(12, 5))
     plt.stackplot(a["week"], *(a[book] for book in BOOK_NAMES), labels=BOOK_NAMES, alpha=0.85)
-    plt.title("Causal Rolling Sub-Book Allocation")
+    plt.title(f"{name} Causal Rolling Sub-Book Allocation")
     plt.ylabel("Allocation")
     plt.xlabel("Week")
     plt.ylim(0, 1)
     plt.legend(loc="upper left", ncol=3)
     plt.tight_layout()
-    plt.savefig(FIG_OUT / "book_allocations.png", dpi=160)
+    safe = name.lower().replace(" ", "_")
+    plt.savefig(FIG_OUT / f"{safe}_book_allocations.png", dpi=160)
     plt.close()
 
 
 def write_results(
-    pnl: pd.DataFrame,
+    variant_pnls: dict[str, pd.DataFrame],
     book_pnls: dict[str, pd.DataFrame],
-    allocation: pd.DataFrame,
+    allocations: dict[str, pd.DataFrame],
     bm: pd.DataFrame,
     first_oos: pd.Timestamp,
 ) -> None:
     metrics = {
-        "Stage 15 Ensemble": perf_metrics(pnl["pnl_net"]),
+        **{name: perf_metrics(df["pnl_net"]) for name, df in variant_pnls.items()},
         **{name: perf_metrics(df["pnl_net"]) for name, df in book_pnls.items()},
     }
     is_metrics = {
-        "Stage 15 Ensemble": perf_metrics(pnl[pnl["week"] < first_oos]["pnl_net"]),
+        **{name: perf_metrics(df[df["week"] < first_oos]["pnl_net"]) for name, df in variant_pnls.items()},
         **{name: perf_metrics(df[df["week"] < first_oos]["pnl_net"]) for name, df in book_pnls.items()},
     }
     oos_metrics = {
-        "Stage 15 Ensemble": perf_metrics(pnl[pnl["week"] >= first_oos]["pnl_net"]),
+        **{name: perf_metrics(df[df["week"] >= first_oos]["pnl_net"]) for name, df in variant_pnls.items()},
         **{name: perf_metrics(df[df["week"] >= first_oos]["pnl_net"]) for name, df in book_pnls.items()},
     }
     for col in ["EW Market", "BTC"]:
@@ -372,9 +384,14 @@ def write_results(
         is_metrics[col] = perf_metrics(b[b["week"] < first_oos]["pnl_net"])
         oos_metrics[col] = perf_metrics(b[b["week"] >= first_oos]["pnl_net"])
 
-    avg_alloc = allocation[BOOK_NAMES].mean().rename("avg_allocation").reset_index()
-    avg_alloc.columns = ["Book", "Average Allocation"]
-    avg_alloc["Average Allocation"] = avg_alloc["Average Allocation"].map(lambda x: f"{x:.1%}")
+    avg_alloc_rows = []
+    for variant, allocation in allocations.items():
+        row = {"Variant": variant}
+        row.update(allocation[BOOK_NAMES].mean().to_dict())
+        avg_alloc_rows.append(row)
+    avg_alloc = pd.DataFrame(avg_alloc_rows)
+    for book in BOOK_NAMES:
+        avg_alloc[book] = avg_alloc[book].map(lambda x: f"{x:.1%}")
 
     md = f"""# Stage 15 - Factor Ensemble Strategy
 
@@ -402,7 +419,7 @@ warm-up. For week `t`, it scores only returns from weeks `< t`, blends that scor
 with a conservative base allocation, applies a regime confidence tilt, and caps
 the priced-risk sleeve.
 
-Average allocation:
+## Ensemble Modes
 
 {avg_alloc.to_markdown(index=False)}
 
@@ -422,13 +439,13 @@ Average allocation:
 
 ![Cumulative returns](artifacts/figures/cumulative_returns.png)
 
-![Book allocations](artifacts/figures/book_allocations.png)
+![Sharpe allocations](artifacts/figures/sharpe_ensemble_book_allocations.png)
+
+![Balanced allocations](artifacts/figures/balanced_ensemble_book_allocations.png)
 
 ## Artifacts
 
-- `artifacts/data/book_allocations.parquet`
-- `artifacts/data/ensemble_weekly_pnl.parquet`
-- `artifacts/data/ensemble_weekly_weights.parquet`
+- `artifacts/data/*_book_allocations.parquet`
 - `artifacts/data/*_weekly_pnl.parquet`
 - `artifacts/data/*_weekly_weights.parquet`
 - `artifacts/manifests/metrics.json`
@@ -445,7 +462,7 @@ directly flipping every factor signal.
     manifest = {
         "first_oos_week": str(first_oos.date()),
         "book_specs": {spec.name: spec.factor_weights for spec in BOOK_SPECS},
-        "base_book_alloc": BASE_BOOK_ALLOC,
+        "variant_base_allocs": VARIANT_BASE_ALLOCS,
         "book_lookback": BOOK_LOOKBACK,
         "book_min_history": BOOK_MIN_HISTORY,
         "full": metrics,
@@ -477,29 +494,36 @@ def main() -> None:
     for name, pnl in book_pnls.items():
         book_returns = book_returns.merge(pnl[["week", "pnl_net"]].rename(columns={"pnl_net": name}), on="week", how="left")
 
-    allocation = rolling_book_allocations(book_returns, regime)
-    allocation.to_csv(DATA_OUT / "book_allocations.csv", index=False)
-    allocation.to_parquet(DATA_OUT / "book_allocations.parquet", index=False)
-
+    allocations = {}
+    variant_pnls = {}
     print("Combining sub-books...", flush=True)
-    weights = combine_book_weights(subbook_weights, allocation)
-    pnl = backtest_combined(weights, panel)
-    weights.to_csv(DATA_OUT / "ensemble_weekly_weights.csv", index=False)
-    weights.to_parquet(DATA_OUT / "ensemble_weekly_weights.parquet", index=False)
-    pnl.to_csv(DATA_OUT / "ensemble_weekly_pnl.csv", index=False)
-    pnl.to_parquet(DATA_OUT / "ensemble_weekly_pnl.parquet", index=False)
+    for variant, base_alloc in VARIANT_BASE_ALLOCS.items():
+        safe = variant.lower().replace(" ", "_")
+        allocation = rolling_book_allocations(book_returns, regime, base_alloc=base_alloc)
+        allocation.to_csv(DATA_OUT / f"{safe}_book_allocations.csv", index=False)
+        allocation.to_parquet(DATA_OUT / f"{safe}_book_allocations.parquet", index=False)
+        weights = combine_book_weights(subbook_weights, allocation)
+        pnl = backtest_combined(weights, panel)
+        weights.to_csv(DATA_OUT / f"{safe}_weekly_weights.csv", index=False)
+        weights.to_parquet(DATA_OUT / f"{safe}_weekly_weights.parquet", index=False)
+        pnl.to_csv(DATA_OUT / f"{safe}_weekly_pnl.csv", index=False)
+        pnl.to_parquet(DATA_OUT / f"{safe}_weekly_pnl.parquet", index=False)
+        allocations[variant] = allocation
+        variant_pnls[variant] = pnl
 
     bm = benchmark_returns(panel)
     bm.to_csv(DATA_OUT / "benchmarks.csv", index=False)
     bm.to_parquet(DATA_OUT / "benchmarks.parquet", index=False)
 
     print("Writing report...", flush=True)
-    plot_cumulative(pnl, book_pnls, bm, first_oos)
-    plot_allocations(allocation)
-    write_results(pnl, book_pnls, allocation, bm, first_oos)
+    plot_cumulative(variant_pnls, book_pnls, bm, first_oos)
+    for variant, allocation in allocations.items():
+        plot_allocations(allocation, variant)
+    write_results(variant_pnls, book_pnls, allocations, bm, first_oos)
 
-    oos = perf_metrics(pnl[pnl["week"] >= first_oos]["pnl_net"])
-    print(f"Stage 15 Ensemble OOS Sharpe={oos['sharpe']:+.2f} AnnRet={oos['ann_return']:+.1%}", flush=True)
+    for variant, pnl in variant_pnls.items():
+        oos = perf_metrics(pnl[pnl["week"] >= first_oos]["pnl_net"])
+        print(f"{variant} OOS Sharpe={oos['sharpe']:+.2f} AnnRet={oos['ann_return']:+.1%}", flush=True)
 
 
 if __name__ == "__main__":
