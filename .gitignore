@@ -71,6 +71,9 @@ reports/*.html
 *.png
 *.html
 
+# Exception: factor visualisation charts are referenced by the RESULTS.md docs
+!12_factor_viz/**/*.png
+
 # Research PDFs are large local source documents; keep notes/scripts in git.
 02_Research/*.pdf
 
