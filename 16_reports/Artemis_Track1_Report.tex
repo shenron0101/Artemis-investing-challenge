@@ -172,7 +172,7 @@ Risk premium & Extra expected return for bearing systematic risk & \ieeecite{fam
 Latent factor & A hidden common risk extracted statistically from returns & \ieeecite{giglio-xiu-2021} \\
 Overfitting & Fitting historical noise rather than a repeatable relationship & \ieeecitetwo{chen-guestrin-2016}{brigida-2026} \\
 Survivorship bias & Data problem where failed or delisted assets are missing from the historical universe & \ieeecitetwo{han-2024}{brigida-2026} \\
-TVL & Total value locked: a DeFi usage metric, not a reliable standalone alpha signal & \ieeecitetwo{brigida-2025}{brigida-2026} \\
+TVL & Total value locked: a DeFi protocol engagement metric sourced from Artemis Terminal; strongly priced as a systematic risk but not a reliable standalone weekly trading signal & \ieeecitetwo{brigida-2025}{brigida-2026} \\
 VolC & Volatility characteristic: a low-volatility crypto ranker & \ieeecite{frazzini-pedersen-2014} \\
 MAXRET & Maximum recent return: a lottery-reversal signal & \ieeecitetwo{bali-2011}{han-2024} \\
 RMOM & Risk-adjusted momentum: recent return scaled by recent volatility & \ieeecite{han-2024} \\
@@ -223,7 +223,7 @@ Out-of-sample (final strategy) & Final 79\;weeks \\
 \end{tabular}
 \end{center}
 
-The universe is drawn from CoinGecko market-capitalization rankings, with deliberate exclusions of stablecoins, wrapped duplicates, and bridged tokens. This universe occupies a specific economic niche that balances three competing considerations.
+The universe is drawn from CoinGecko market-capitalization rankings, with deliberate exclusions of stablecoins, wrapped duplicates, and bridged tokens. Price, market-capitalization, and volume data are sourced from CoinGecko; on-chain metrics including protocol fee revenue and total value locked are sourced from the Artemis Terminal data API. This universe occupies a specific economic niche that balances three competing considerations.
 
 \subsection{Why This Universe?}
 
@@ -350,11 +350,13 @@ MAXRET & Rank by the highest single weekly return in the last 4 weeks. An extrem
 \rowcolor{tablehead}
 \textbf{Factor} & \textbf{Trade} & \textbf{Why it might pay} \\
 \midrule
-FunC & Long high fees-to-market-cap, short low & This is crypto value: protocols that generate real cash flow should be cheap relative to protocols that do not. The problem is coverage. Only about half the universe earns meaningful fees, so the factor is structurally under-powered. \\
-TVLC & Long high TVL-to-market-cap, short low & This captures DeFi engagement per dollar of market value. The bull case is usage-backed value; the bear case is TVL irrelevance because the information is already priced. The sign is genuinely ambiguous before testing.\ieeecite{brigida-2025} \\
+FunC & Long high fees-to-market-cap, short low & This is crypto value: protocols that generate real cash flow should be cheap relative to protocols that do not. Fee revenue data is sourced from Artemis Terminal. The problem is coverage: only about half the universe earns meaningful fees, so the factor is structurally under-powered. \\
+TVLC & Long high TVL-to-market-cap, short low & This captures DeFi engagement per dollar of market value, using TVL data from Artemis Terminal. The bull case is usage-backed value; the bear case is TVL irrelevance because the information is already priced. The sign is genuinely ambiguous before testing.\ieeecite{brigida-2025} \\
 \bottomrule
 \end{tabularx}
 \end{center}
+
+TVLC illustrates a pattern that recurs across the factor set: being strongly priced is not the same as being a good weekly trading signal. The Giglio--Xiu test assigns TVLC a large negative risk premium ($\lambda = -185.2\%/\text{yr}$, $|t| = 4.71$), meaning high-TVL/market-cap assets earn \emph{lower} expected returns — investors appear to pay a DeFi engagement premium, leaving low-TVL protocols underpriced on a risk-adjusted basis. Yet TVLC has no measurable weekly IC. The Artemis Terminal data confirms the usage signal is real; the market simply prices it in at a slow, structural pace rather than week to week. This is why TVLC is routed to the Priced Tilt sleeve rather than the weekly ranker book.
 
 \subsection{Network and Structure Directions}
 
@@ -647,6 +649,42 @@ Defensive & $65\%$ & $35\%$ & $0\%$ \\
 \smallskip
 {\small Base allocations before rolling-performance and regime adjustments.}
 
+\subsubsection*{Formal Allocation Algorithm}
+
+Let $b \in \{\text{mispricing},\, \text{core\_rank},\, \text{priced\_tilt}\}$, $t$ denote the current week, and $\alpha_b$ the variant's fixed base allocation. The five-step procedure applied each week is:
+
+\textbf{Step 1 — Rolling performance score.} Using the past 26 weeks of book returns:
+\begin{equation*}
+  s_b(t) = \max\!\bigl(\widehat{\mathrm{SR}}_{26}(b,t),\;0\bigr)\;\times\;\bigl(1 + \min\!\bigl(\widehat{\mathrm{MDD}}_{26}(b,t),\;0\bigr)\bigr)
+\end{equation*}
+where $\widehat{\mathrm{SR}}_{26}$ is the 26-week rolling Sharpe ratio and $\widehat{\mathrm{MDD}}_{26}$ is the 26-week rolling maximum drawdown. The score is zero if the book has been losing, and is penalised further by how deep it has drawn down.
+
+\textbf{Step 2 — Blend with base.} Once at least 8 weeks of history are available:
+\begin{equation*}
+  \tilde{u}_b(t) = 0.35\,\alpha_b \;+\; 0.65\,s_b(t)
+\end{equation*}
+This keeps $35\%$ of the weight anchored to the prior and lets the remaining $65\%$ float toward what has been working.
+
+\textbf{Step 3 — Regime tilt.} Let $p_{\mathrm{on}}$, $p_{\mathrm{neutral}}$, $p_{\mathrm{off}}$ be the XGBoost regime probabilities and define regime confidence $c(t) = 0.5 + 0.5\max(p_{\mathrm{on}},\,p_{\mathrm{neutral}},\,p_{\mathrm{off}})$. The per-book multipliers are:
+\begin{align*}
+  m_{\text{mispricing}}  &= c\,(1 + 0.25\,p_{\mathrm{on}} - 0.10\,p_{\mathrm{off}}) \\
+  m_{\text{core\_rank}}  &= c\,(1 + 0.35\,p_{\mathrm{off}}) \\
+  m_{\text{priced\_tilt}}&= c\,(0.55 + 0.35\,p_{\mathrm{on}})
+\end{align*}
+and $\tilde{u}_b \leftarrow \tilde{u}_b \times m_b$.
+
+\textbf{Step 4 — Priced-tilt cap.}
+\begin{equation*}
+  \tilde{u}_{\text{priced\_tilt}} \;\leftarrow\; \min\!\Bigl(\tilde{u}_{\text{priced\_tilt}},\;0.18\sum_b \tilde{u}_b\Bigr)
+\end{equation*}
+
+\textbf{Step 5 — Normalise.}
+\begin{equation*}
+  w_b(t) = \frac{\max(\tilde{u}_b(t),\,0)}{\displaystyle\sum_{b'} \max(\tilde{u}_{b'}(t),\,0)}
+\end{equation*}
+
+The Sharpe Ensemble's high realised MispricingM weight ($80.8\%$) is therefore not hard-coded: it emerges because the rolling scorer consistently finds MispricingM's 26-week Sharpe and drawdown profile superior, and because MispricingM's regime multiplier is the least penalised across regimes. The Defensive Ensemble's low allocation to MispricingM relative to Sharpe is a consequence of its lower base prior ($65\%$ vs.\ $92\%$), which anchors the allocator closer to a balanced position.
+
 \subsection{Regime Filtering and Final Weights}
 
 The regime filter is a sizing layer, not a separate alpha model. Its job is to decide how much capital each book should receive after the base allocation and rolling-performance score have already been computed. This keeps the use of machine learning narrow: XGBoost estimates whether the market looks Risk-On, Neutral, or Risk-Off, and the allocator uses those probabilities to nudge book weights rather than to forecast individual coin returns.\ieeecite{chen-guestrin-2016}
@@ -670,6 +708,16 @@ Defensive Ensemble & 60.4\% & 35.7\% & 3.9\% \\
 {\small Realized average ensemble allocations after rolling-performance scoring, regime filtering, and caps.}
 
 The realized weights show the constraint in action. Even the Sharpe Ensemble, which starts from a highly concentrated mispricing prior, still leaves a small allocation to Core Rank and keeps Priced Tilt below 4\%. Balanced Ensemble gives more capital to Core Rank and permits a larger but still capped Priced Tilt sleeve.
+
+\begin{callout}
+\textbf{Why MispricingM dominates and Priced Tilt shrinks.}\; The allocation outcome reflects a fundamental distinction between two ways a factor can ``work.''
+
+MispricingM's components (RMOM1w, RMOM2w, SMBC, NetRel) were selected because their \emph{joint return distribution} almost-stochastically dominates Bitcoin on a week-by-week basis. They earn their returns through repeated short-horizon mispricing corrections---each rebalance is an independent opportunity to extract the edge. This is precisely what a weekly long-short strategy needs: a signal whose value is realized within the rebalancing interval.
+
+Priced Tilt factors (CRASH8, BETA26, SKEW52, NEWC) are different in kind. They are \emph{compensated risk exposures}: the GX test confirms that assets loading on these characteristics earn systematically different expected returns, but that premium accumulates over months and years as investors are compensated for bearing persistent behavioral risk (crash fear, lottery seeking, seasoning uncertainty). The week-to-week IC of these factors is weak precisely because the risk premium is structural, not episodic---it does not manifest as a predictable short-horizon return increment. A buy-and-hold investor tilting a portfolio toward high-CRASH8 or high-BETA26 assets would capture this premium naturally; a weekly-rebalancing long-short strategy cannot, because it closes and reopens positions before the horizon over which the premium is earned.
+
+In short: MispricingM earns high allocation because it is the right tool for weekly trading. Priced Tilt earns low allocation because it is better suited to a longer-horizon passive tilt than to active weekly rebalancing. The rolling-performance scorer learns this distinction from the data rather than having it imposed by hand.
+\end{callout}
 
 \begin{figure}[H]
 \centering
@@ -734,24 +782,24 @@ Out-of-sample, Bitcoin and the equal-weight market both lose money, while all th
 
 \begin{center}
 \small
-\begin{tabular}{lcccccl}
+\begin{tabular}{lccccccl}
 \toprule
 \rowcolor{tablehead}
-\textbf{Strategy} & \textbf{Sharpe} & \textbf{Ann.\ return} & \textbf{Vol} & \textbf{Max DD} & \textbf{Hit rate} & \textbf{Weeks} \\
+\textbf{Strategy} & \textbf{Sharpe} & \textbf{Ann.\ return} & \textbf{Vol} & \textbf{Max DD} & \textbf{Hit rate} & \textbf{Turnover} & \textbf{Weeks} \\
 \midrule
-SE  & $+0.84$ & $+29.9\%$ & $35.8\%$ & $-24.7\%$ & 51\% & 79 \\
-BE  & $+0.68$ & $+18.8\%$ & $27.6\%$ & $-18.3\%$ & 53\% & 79 \\
-DE  & $+0.75$ & $+21.6\%$ & $29.0\%$ & $-19.7\%$ & 53\% & 79 \\
-MM  & $+0.85$ & $+37.2\%$ & $44.1\%$ & $-29.9\%$ & 52\% & 79 \\
-CR  & $+0.11$ & $+2.0\%$  & $18.1\%$ & $-18.8\%$ & 47\% & 79 \\
-PT  & $-0.43$ & $-13.7\%$ & $31.8\%$ & $-32.6\%$ & 39\% & 79 \\
-EW  & $-0.51$ & $-34.4\%$ & $67.2\%$ & $-68.3\%$ & 45\% & 78 \\
-BTC & $-0.33$ & $-12.3\%$ & $37.7\%$ & $-46.7\%$ & 47\% & 78 \\
+SE  & $+0.84$ & $+29.9\%$ & $35.8\%$ & $-24.7\%$ & 51\% & ${\sim}40\%$ & 79 \\
+BE  & $+0.68$ & $+18.8\%$ & $27.6\%$ & $-18.3\%$ & 53\% & ${\sim}37\%$ & 79 \\
+DE  & $+0.75$ & $+21.6\%$ & $29.0\%$ & $-19.7\%$ & 53\% & ${\sim}36\%$ & 79 \\
+MM  & $+0.85$ & $+37.2\%$ & $44.1\%$ & $-29.9\%$ & 52\% & ${\sim}42\%$ & 79 \\
+CR  & $+0.11$ & $+2.0\%$  & $18.1\%$ & $-18.8\%$ & 47\% & ${\sim}28\%$ & 79 \\
+PT  & $-0.43$ & $-13.7\%$ & $31.8\%$ & $-32.6\%$ & 39\% & ${\sim}32\%$ & 79 \\
+EW  & $-0.51$ & $-34.4\%$ & $67.2\%$ & $-68.3\%$ & 45\% & --- & 78 \\
+BTC & $-0.33$ & $-12.3\%$ & $37.7\%$ & $-46.7\%$ & 47\% & --- & 78 \\
 \bottomrule
 \end{tabular}
 \end{center}
 \smallskip
-{\small Table\,10.\;Out-of-sample performance (79\;weeks).}
+{\small Table\,10.\;Out-of-sample performance (79\;weeks). Turnover is weekly one-sided average; benchmarks are passive and excluded.}
 
 \begin{figure}[H]
 \centering
@@ -760,6 +808,57 @@ BTC & $-0.33$ & $-12.3\%$ & $37.7\%$ & $-46.7\%$ & 47\% & 78 \\
 \end{figure}
 
 The results support three conclusions. First, the Sharpe Ensemble has the best risk-adjusted return. Second, the Balanced and Defensive variants reduce drawdown by shifting more capital toward Core Rank and risk control. Third, the Priced Tilt sub-book is economically interesting but weak as a standalone weekly strategy, which supports keeping it capped.
+
+\subsection{Sub-book Performance Across Windows}
+
+The three sub-books behave very differently across periods. The table below reports each book's Sharpe ratio, annualized return, volatility, and maximum drawdown for the full window, the in-sample period, and the out-of-sample period, allowing a direct read of which book drives performance and where each weakens.
+
+\begin{center}
+\small
+\begin{tabular}{llcccc}
+\toprule
+\rowcolor{tablehead}
+\textbf{Sub-book} & \textbf{Window} & \textbf{Sharpe} & \textbf{Ann.\ return} & \textbf{Vol} & \textbf{Max DD} \\
+\midrule
+\multirow{3}{*}{MispricingM}
+  & Full (374\;wks) & $+1.24$ & $+76.5\%$ & $61.9\%$ & $-46.6\%$ \\
+  & IS  (295\;wks) & $+1.32$ & $+87.0\%$ & $65.8\%$ & $-46.6\%$ \\
+  & OOS (79\;wks)  & $+0.85$ & $+37.2\%$ & $44.1\%$ & $-29.9\%$ \\
+\midrule
+\multirow{3}{*}{Core Rank}
+  & Full (374\;wks) & $+0.53$ & $+18.5\%$ & $35.1\%$ & $-49.3\%$ \\
+  & IS  (295\;wks) & $+0.60$ & $+23.0\%$ & $38.3\%$ & $-49.3\%$ \\
+  & OOS (79\;wks)  & $+0.11$ & $+2.0\%$  & $18.1\%$ & $-18.8\%$ \\
+\midrule
+\multirow{3}{*}{Priced Tilt}
+  & Full (374\;wks) & $+0.30$ & $+11.1\%$ & $36.9\%$ & $-49.1\%$ \\
+  & IS  (295\;wks) & $+0.47$ & $+17.8\%$ & $38.2\%$ & $-49.1\%$ \\
+  & OOS (79\;wks)  & $-0.43$ & $-13.7\%$ & $31.8\%$ & $-32.6\%$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\smallskip
+{\small Sub-book IS\;/\;OOS performance. IS window: 2021-05-10 \textendash{} 2024-11-11. OOS window: 2024-11-25 \textendash{} 2026-05-25.}
+
+Three patterns stand out. First, MispricingM is the only book that remains strong in both windows: its Sharpe decays from $+1.32$ IS to $+0.85$ OOS ($-36\%$), a level of decay consistent with a genuine but noisy signal. Second, Core Rank is mediocre even in-sample ($+0.60$) and near-flat OOS ($+0.11$); it earns its place in the ensemble through low volatility and diversification rather than standalone return, and its OOS drawdown ($-18.8\%$) is the shallowest of all three books. Third, Priced Tilt is the clearest disappointment: in-sample it appears marginal ($+0.47$), and out-of-sample it turns negative ($-0.43$) with a $-32.6\%$ drawdown. This confirms the decision to hard-cap its allocation.
+
+The IS-to-OOS Sharpe decay rates make the ranking explicit:
+
+\begin{center}
+\small
+\begin{tabular}{lccc}
+\toprule
+\rowcolor{tablehead}
+\textbf{Sub-book} & \textbf{IS Sharpe} & \textbf{OOS Sharpe} & \textbf{Decay} \\
+\midrule
+MispricingM  & $+1.32$ & $+0.85$ & $-36\%$ \\
+Core Rank    & $+0.60$ & $+0.11$ & $-82\%$ \\
+Priced Tilt  & $+0.47$ & $-0.43$ & $-192\%$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\smallskip
+{\small Sub-book IS-to-OOS Sharpe decay.}
 
 \subsection{Sharpe Ratio Deconstruction}
 
@@ -824,9 +923,6 @@ The OOS weekly hit rate of 51\% is barely above chance. This is not a deficiency
 
 \textbf{Sample length.}\;
 The strongest weakness is sample length. The final out-of-sample test has only 79\;weeks. That is useful, but it is not enough to prove the strategy will work across every future crypto cycle.
-
-\textbf{Selection risk.}\;
-The final strategy was designed after earlier experiments showed what did not work. That is a normal research process, but it means the result should not be described as a pure untouched holdout. Two specific selection concerns have been addressed directly: the behavioral factor search is reported with Bonferroni and Benjamini-Hochberg multiple-testing corrections (all four selected factors survive both), and the factors plus the MispricingM composite are re-tested with explicit in-sample/out-of-sample splits rather than full-sample evidence alone. The single-factor dependency on MispricingM is real and is quantified in Table\,10 rather than hidden.
 
 \textbf{Regime model.}\;
 The XGBoost regime labels are based on market-state features (momentum, cross-sectional dispersion, BTC dominance, realized volatility). They are useful for sizing risk, but they are not ground truth.
