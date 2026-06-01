@@ -125,7 +125,7 @@
 
 \newpage
 \setcounter{page}{2}
-\tableofcontents
+{\small\tableofcontents}
 \newpage
 
 % ══════════════════════════════════════════════════════════════════════
@@ -187,6 +187,7 @@ NEWC & Newer-coin seasoning tilt & \ieeecitetwo{han-2024}{brigida-2026} \\
 \smallskip
 The report uses \textbf{in-sample} to mean the research window used to study and build the model, and \textbf{out-of-sample} to mean the later window used to test whether the model remains effective after design choices have been finalized.
 
+\newpage
 % ══════════════════════════════════════════════════════════════════════
 \section{Competition Objective}
 % ══════════════════════════════════════════════════════════════════════
@@ -377,14 +378,14 @@ Once clusters exist, two network factors follow naturally. NetMom is within-clus
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{figures/network_clusters.png}
+\includegraphics[width=0.9\textwidth]{figures/network_clusters.png}
 \caption{Coin correlation network with Louvain clusters. The graph is built from this project's own return panel using the Spearman correlation, distance transform, minimum spanning tree, and Louvain community detection pipeline. Each dot is a coin, each line is a strong retained co-movement link, and each colour is a data-driven cluster.}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{figures/netmom_netrel_schematic.png}
-\caption{NetMom and NetRel illustrated on the same network. NetMom works inside one cluster by buying the local momentum leader and shorting the local laggard. NetRel works between clusters by buying coins in the leading narrative bloc and shorting coins in the lagging bloc. The figures are produced by \texttt{figures/make\_network\_viz.py}.}
+\includegraphics[width=0.9\textwidth]{figures/netmom_netrel_schematic.png}
+\caption{NetMom and NetRel illustrated on the same network. NetMom works inside one cluster by buying the local momentum leader and shorting the local laggard. NetRel works between clusters by buying coins in the leading narrative bloc and shorting coins in the lagging bloc.}
 \end{figure}
 
 \textbf{Sparse PCA.} Ordinary PCA finds the main directions along which all coins move, but the resulting components load a little on many coins and are hard to interpret. Sparse PCA adds a penalty that pushes most loadings to zero, so each component loads on a smaller and more readable group. We extract four sparse components: SPC1 is a broad DeFi-majors or ``everything together'' direction; SPC2 is a payment and old-guard direction; SPC3 is an alt-L1 direction; and SPC4 is a legacy, privacy, and exchange-token direction. These are market-structure directions, not standalone trades.
@@ -550,7 +551,7 @@ The key design choice in the final strategy construction is \emph{not} to blend 
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{figures/factor_routing_graph.png}
+\includegraphics[width=0.9\textwidth]{figures/factor_routing_graph.png}
 \caption{Factor routing graph used to construct the three strategy books. The IC route becomes Core Rank, the ASD route becomes MispricingM, and the GX route becomes Priced Tilt. This preserves the kind of evidence each factor has instead of forcing all factors into one master score.}
 \end{figure}
 
@@ -713,18 +714,6 @@ Defensive Ensemble & 60.4\% & 35.7\% & 3.9\% \\
 
 The realized weights show the constraint in action. Even the Sharpe Ensemble, which starts from a highly concentrated mispricing prior, still leaves a small allocation to Core Rank and keeps Priced Tilt below 4\%. Balanced Ensemble gives more capital to Core Rank and permits a larger but still capped Priced Tilt sleeve.
 
-\begin{callout}
-\textbf{Why MispricingM dominates and Priced Tilt shrinks.}\; The allocation outcome reflects a fundamental distinction between two ways a factor can ``work.''
-
-MispricingM's components (RMOM1w, RMOM2w, SMBC, NetRel) were selected because their \emph{joint return distribution} almost-stochastically dominates Bitcoin on a week-by-week basis. They earn their returns through repeated short-horizon mispricing corrections---each rebalance is an independent opportunity to extract the edge. This is precisely what a weekly long-short strategy needs: a signal whose value is realized within the rebalancing interval. These are also all price-based signals: momentum, size, and network-relative rotation are computed entirely from observed returns, with no exogenous data needed.
-
-Priced Tilt factors (TVLC, CRASH8, BETA26, SKEW52, NEWC) are different in kind. They are \emph{compensated risk exposures}: the GX test confirms that assets loading on these characteristics earn systematically different expected returns, but that premium accumulates over months and years as investors are compensated for bearing persistent behavioral or fundamental risk. The week-to-week IC of these factors is weak precisely because the risk premium is structural, not episodic. A buy-and-hold investor tilting a portfolio toward high-CRASH8 or low-TVLC assets would capture the premium naturally; a weekly-rebalancing long-short book cannot, because it closes and reopens positions before the horizon over which the premium is earned.
-
-\textbf{TVLC is the cleanest illustration of this for on-chain data specifically.} A protocol's TVL is observable in real time through the Artemis Terminal feed, but the \emph{repricing} that connects TVL to expected returns moves slowly: investors compare protocols, reallocate capital between them, and earn or pay the engagement premium over months as positioning shifts. The week-to-week noise in returns swamps the daily updates in TVL, so an IC test sees nothing useful, while a multi-year GX priced-risk test detects a $|t|=4.71$ effect. The same logic applies in principle to any on-chain engagement family---protocol fees, DEX volume, active-address counts, stablecoin inflows: these are structural quality signals that compound into expected returns through investor reallocation, not through week-to-week mispricing. Crypto's unique data advantage---a fully observable protocol balance sheet, updated continuously---is therefore most powerful when it is used to identify priced systematic risk rather than to forecast next-week returns. They belong on the priced-risk side of the factor router, not on the IC side.
-
-In short: MispricingM earns high allocation because price-based weekly signals are exactly what a weekly rebalancing strategy can extract. Priced Tilt earns low allocation because its on-chain (TVLC) and behavioral components carry structural risk premia that accumulate over months rather than weeks. The rolling-performance scorer learns this distinction from the data; the appropriate response is not to discard Priced Tilt but to size it small and acknowledge that a longer-horizon allocator would be the right vehicle for capturing these slow premia.
-\end{callout}
-
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth]{figures/image5.png}
@@ -737,6 +726,19 @@ In short: MispricingM earns high allocation because price-based weekly signals a
 \caption{Balanced Ensemble allocation over time. This variant gives more weight to Core Rank and is designed to reduce dependence on the mispricing sleeve.}
 \end{figure}
 
+\begin{callout} [title=Why MispricingM dominates and Priced Tilt shrinks]
+The allocation outcome reflects a fundamental distinction between two ways a factor can ``work.''
+
+MispricingM's components (RMOM1w, RMOM2w, SMBC, NetRel) were selected because their \emph{joint return distribution} almost-stochastically dominates Bitcoin on a week-by-week basis. They earn their returns through repeated short-horizon mispricing corrections---each rebalance is an independent opportunity to extract the edge. This is precisely what a weekly long-short strategy needs: a signal whose value is realized within the rebalancing interval. These are also all price-based signals: momentum, size, and network-relative rotation are computed entirely from observed returns, with no exogenous data needed.
+
+Priced Tilt factors (TVLC, CRASH8, BETA26, SKEW52, NEWC) are different in kind. They are \emph{compensated risk exposures}: the GX test confirms that assets loading on these characteristics earn systematically different expected returns, but that premium accumulates over months and years as investors are compensated for bearing persistent behavioral or fundamental risk. The week-to-week IC of these factors is weak precisely because the risk premium is structural, not episodic. A buy-and-hold investor tilting a portfolio toward high-CRASH8 or low-TVLC assets would capture the premium naturally; a weekly-rebalancing long-short book cannot, because it closes and reopens positions before the horizon over which the premium is earned.
+
+\textbf{TVLC is the cleanest illustration of this for on-chain data specifically.} A protocol's TVL is observable in real time through the Artemis Terminal feed, but the \emph{repricing} that connects TVL to expected returns moves slowly: investors compare protocols, reallocate capital between them, and earn or pay the engagement premium over months as positioning shifts. The week-to-week noise in returns swamps the daily updates in TVL, so an IC test sees nothing useful, while a multi-year GX priced-risk test detects a $|t|=4.71$ effect. The same logic applies in principle to any on-chain engagement family---protocol fees, DEX volume, active-address counts, stablecoin inflows: these are structural quality signals that compound into expected returns through investor reallocation, not through week-to-week mispricing. Crypto's unique data advantage---a fully observable protocol balance sheet, updated continuously---is therefore most powerful when it is used to identify priced systematic risk rather than to forecast next-week returns. They belong on the priced-risk side of the factor router, not on the IC side.
+
+In short: MispricingM earns high allocation because price-based weekly signals are exactly what a weekly rebalancing strategy can extract. Priced Tilt earns low allocation because its on-chain (TVLC) and behavioral components carry structural risk premia that accumulate over months rather than weeks. The rolling-performance scorer learns this distinction from the data; the appropriate response is not to discard Priced Tilt but to size it small and acknowledge that a longer-horizon allocator would be the right vehicle for capturing these slow premia.
+\end{callout}
+
+\newpage
 % ══════════════════════════════════════════════════════════════════════
 \section{Backtest Results}
 % ══════════════════════════════════════════════════════════════════════
