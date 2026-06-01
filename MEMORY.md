@@ -3,126 +3,179 @@
 ## What this project is
 
 **Artemis Quant Competition — Track #1: Crypto Factor Rebalancing Strategy.**
-Goal: build a defensible weekly-rebalanced long-short crypto factor portfolio across ~113 assets (all large-cap >$10B + top 100 below large-cap, CoinGecko snapshot 2026-05-08, excluding stablecoins/wrapped/bridged). Not a single-asset predictor. The competition rewards cross-sectional ranking power, regime robustness, turnover control, and economic interpretability.
+Goal: build a defensible weekly-rebalanced long-short crypto factor portfolio across ~113 large-cap assets (CoinGecko snapshot 2026-05-08, excluding stablecoins/wrapped/bridged). The competition rewards cross-sectional ranking power, regime robustness, turnover control, and economic interpretability.
 
-**Current competition candidate: `08_nalfp` NALFP v3** (latest commit `66bea36`, 2026-05-29).
+**Current submission: Stage 15 Factor Ensemble Strategy** — the production pipeline runs Stages 09 → 10 → 12 → 15. Stages 01–08 and 13–14 are research history / appendix material.
 
 ---
 
-## Pipeline stages
+## Folder map
 
-| Stage | Folder | Purpose |
+| Folder | Role | Status |
 |---|---|---|
-| 1 | `01_Data_Collection` | Data pipeline: Artemis API, CoinGecko, Binance, DeFiLlama |
-| 2 | `02_Research` | 10-paper review + Track 1 research synthesis |
-| 3 | `03_analysis` | Data quality, universe profiling, returns, on-chain activity, factor signals, cross-section |
-| 4 | `04_factors` | RAAM v2 composite (M/V/C/T + F/S/G signals) |
-| 5 | `05_btc_direction` | BTC direction paper reproduction (Dubey & Enke 2025) |
-| 6 | `06_artemis_econometrics` | Weekly Fama-MacBeth panel + latent controls + network features |
-| 7 | `07_hidden_factor_pricing` | Giglio-Xiu latent factor pricing (paper reproduction) |
-| 8 | `08_nalfp` | **NALFP v3 — active competition submission** |
-
----
-
-## NALFP v3 — current architecture (latest pull)
-
-Three pillars:
-1. **Network dynamics** (`01_network_dynamics.py`): rolling 12-week Spearman MST + Louvain → `within_cluster_mom`, `cross_cluster_rel`, `network_entropy`. 7–11 communities per week (mean entropy 2.175). Market is persistently fragmented.
-2. **Factor zoo + Giglio-Xiu** (`02_factor_pricing.py`): 9 factor portfolios (RC, SMBC, MomC, VolC, FunC, SupC, NetMom, NetRel) → GX three-pass pricing → per-week IC time series (`factor_ic_timeseries.parquet`).
-3. **IC-weighted signal combination** (`03_signal_combination.py`): *replaces* the v2 regime detector. Rolling 8-week mean IC, lagged 1 week (strictly OOS), IC-proportional weights across 6 tradeable factors (SMBC, MomC, VolC, FunC, NetMom, NetRel). Equal-weight fallback when all ICs ≤ 0 (~10% of weeks).
-
-**Run order (v3):**
-```
-python3 08_nalfp/01_network_dynamics.py
-python3 08_nalfp/02_factor_pricing.py
-python3 08_nalfp/03_signal_combination.py   ← NOT 03_regime_detector.py
-python3 08_nalfp/04_portfolio_construction.py
-python3 08_nalfp/05_backtest.py
-python3 08_nalfp/06_report.py
-```
-
-**Why v3 over v2:** The two-stream GX-vs-network adaptive blend (v2) overfitted the 24-week training-window λ̂. Per-factor IC-proportional weighting is the same convention validated in RAAM v2 (stage 04) and avoids fitting the regime boundary.
-
----
-
-## Key results
-
-### NALFP v3 OOS backtest (24-week OOS window)
-
-| Strategy | OOS Ann.Return | OOS Sharpe | OOS MaxDD | OOS Turnover |
-|---|---|---|---|---|
-| **NALFP v3** | **+8.7%** | **+1.24** | **-3.47%** | **8.7%** |
-| EW_mom_long | +66.2% | +1.52 | -24.80% | 33.8% |
-| plus_lat (stage 06) | +129.0% | +3.75 | -7.39% | 65.1% |
-
-NALFP v3 OOS Sharpe improved from -1.44 (v2) to +1.24 (v3). Bootstrap CI crosses zero (−2.01 to +4.80). NALFP is much lower-vol and lower-drawdown than benchmarks; does not yet beat them on raw return. `plus_lat` benchmark has only 16 OOS weeks (shorter window).
-
-### IC-weighted factor mean weights (OOS)
-| Factor | Full-sample IC | OOS IC | Mean OOS weight |
-|---|---|---|---|
-| VolC | 0.090 | 0.104 | **0.442** |
-| NetRel | 0.046 | 0.022 | 0.185 |
-| FunC | 0.001 | 0.017 | 0.144 |
-| MomC | 0.026 | 0.020 | 0.107 |
-| SMBC | 0.015 | 0.056 | 0.095 |
-| NetMom | 0.006 | 0.002 | 0.075 |
-
-VolC dominates (~44% weight) because it has the highest and most stable IC. NetRel second at 18.5%.
-
-### GX factor zoo (52-week sample)
-5 of 7 priced at |t|≥1.65 in observed-only model: VolC (t=+4.27), MomC (+3.44), NetMom (+3.37), NetRel (+3.37), SMBC (+3.00). In the full GX model: VolC (t=+3.24) and NetMom/NetRel (~t=+2.4) are most robust. Hidden factors H1–H3 are not statistically priced. Bai-Ng selected K_hidden=3 (capped; short T=24 training weeks).
-
-### Earlier stage results
-- **04_factors RAAM v2 ICs**: V=+0.21, C=+0.18, S=+0.12, M=+0.06, T≈0 (A1 bug — T signals silenced)
-- **06_artemis_econometrics**: `plus_lat` model IC IR=+0.54, LS Sharpe=+3.74 (16 OOS weeks); `plus_net` was weak (IC IR=+0.20)
-- **07_hidden_factor_pricing**: only `crypto_smb` survives GX latent controls (FMB t=2.19, latent-adj t=1.97)
-- **05_btc_direction**: best classifier `l1__random_forest` balanced acc 53.94%; best trading `all__gradient_boosting` Sharpe 1.82
-
----
-
-## Bug fixes pending (`.github/bug-fix-plan.md`)
-
-Priority 04→05→06→07. Some already applied (C3, D1 confirmed in REPORT.md).
-
-| ID | File | Fix | Status |
-|---|---|---|---|
-| A1 | `04_factors/04_RAAM_v2_composite.py:107` and `03_analysis/05_factor_signals.py:153` | T-factor ATR lower-band: `max() + atr` → `min() - atr` | **Not applied** |
-| A2 | `04_factors/02_S_supply_absorption.py`, `04_RAAM_v2_composite.py` | Remove overhang tiled from current snapshot in IC test | **Not applied** |
-| B1 | `05_btc_direction/02_feature_engineering.py` | Exogenous features missing `.shift(1)` lag | **Not applied** |
-| C1 | `06_artemis_econometrics/04_latent_controls.py:97` | Window `i+1` → `i` (current week contaminates PC loads) | **Not applied** |
-| C2 | `06_artemis_econometrics/06_backtest.py` | Remove contemporaneous mom regressor | Applied (confirmed in REPORT.md) |
-| C3 | `06_artemis_econometrics/05_models.py` | Remove degenerate `base_lasso` | Applied (confirmed in REPORT.md) |
-| D1 | `07_hidden_factor_pricing/05_report.py` | Add "Scope of This Test" in-sample framing section | Applied (confirmed in REPORT.md) |
-
----
-
-## Research design rules (from 10-paper review)
-
-These constrain all future factor and portfolio decisions:
-
-1. **TVL alone is not alpha.** Use only as denominator: `fees/TVL`, `revenue/TVL`, `fees/mcap`, `revenue/mcap`.
-2. **Quality-adjusted Artemis metrics beat raw.** Prefer `real_txns`, `real_volume`; penalize `pct_gamed_*`.
-3. **Factor premia need latent-factor survival testing.** Test all new factors with GX / FMB controls before crediting them.
-4. **Community-aware diversification required.** No single Louvain cluster > 40% of long-leg weight.
-5. **Stablecoin inflow z-score** is the primary macro regime proxy (computed in `06_artemis_econometrics/01_build_panel.py`).
-6. **Do not use shuffle-based CV.** Always chronological splits.
-7. **Banded rebalancing** preserves alpha at lower turnover (Waterfall Rebalancing paper).
+| `01_Data_Collection/` | Data pull scripts, raw snapshots (Artemis, CoinGecko, Binance, DeFiLlama) | Archive |
+| `02_Research/` | 10-paper literature review + research synthesis | Archive |
+| `03_analysis/` | Exploratory analysis, universe profiling, early factor signals | Archive |
+| `04_factors/` | RAAM v2 composite prototype (M/V/C/T + F/S/G signals) | Archive |
+| `05_btc_direction/` | BTC directional model (Dubey & Enke 2025 reproduction) | Archive |
+| `06_artemis_econometrics/` | Weekly Fama-MacBeth panel + latent controls + network features | Archive |
+| `07_hidden_factor_pricing/` | Giglio-Xiu latent factor pricing (paper reproduction) | Archive |
+| `08_nalfp/` | NALFP v3 — initial IC-weighted factor portfolio build | Archive |
+| `09_nalfp_add/` | **Production** — universe + returns + Sparse-PCA + GX pricing + factor validation | Production |
+| `10_behavioral_gx/` | **Production** — 182-candidate behavioral factor search → 4 priced-risk factors | Production |
+| `12_factor_viz/` | **Production** — per-factor visualizations and RESULTS.md | Production |
+| `13_rcfp/` | Regime-conditioned factor portfolios (Appendix A) | Appendix |
+| `14_regime_factor_strategy/` | XGBoost regime-aware strategy (Appendix B) | Appendix |
+| `15_factor_ensemble_strategy/` | **Production** — three-book ensemble, causal allocator, backtest, ablations | Production |
+| `16_reports/` | Final research report (.md + .docx) and audit report | Reports |
+| `17_presentation_slides/` | HTML presentation deck (in progress) | In Progress |
 
 ---
 
 ## Data sources
 
-| Source | Provides | Access |
+| Source | Provides | Auth |
 |---|---|---|
-| Artemis API | Adjusted txns/vol, real vs. gamed, buyers/sellers, DAU, fees, revenue, stablecoin flows | `/asset/symbols/`, `/metrics/`, `/flows/top/` |
-| CoinGecko | Price, mcap, volume, supply, FDV, exclusion flags | API + browser |
-| Binance | OHLCV, quote vol, trade count | API; bulk: `data.binance.vision` |
-| DeFiLlama | Protocol/chain TVL, fees/revenue, stablecoin inflows, treasury | `api-docs.defillama.com` |
+| Binance | OHLCV returns, realized vol, turnover, trade count | Public (no key for market data) |
+| CoinGecko | Price, mcap, supply, FDV, exclusion flags, categories | `COINGECKO_API_KEY` |
+| Artemis | Adjusted txns/volume, real vs gamed, DAU, fees, network data | `ARTEMIS_API_KEY` |
+| DeFiLlama | Protocol/chain TVL, fees/revenue, stablecoin inflows | Free, no auth |
+
+Credentials: `~/.hermes/.env`. Never commit to repo.
 
 Clean parquet files in `01_Data_Collection/data/clean/`:
-- `coingecko_daily_ticks.parquet` — daily price/mcap/vol for all assets
+- `coingecko_daily_ticks.parquet` — daily price/mcap/vol
 - `coingecko_coin_details.parquet` — metadata + exclusion flags
-- `artemis_activity_long.parquet` — on-chain activity (partial coverage)
+- `artemis_activity_long.parquet` — on-chain activity
 - `asset_master.parquet` — symbol/ID master table
 
-External code: `github.com/adambaybutt/crypto_asset_pricing` (DSLFM framework, reusable for characteristic model work).
+Stage 09 artifacts (in `09_nalfp_add/artifacts/`):
+- `price_mcap_panel_weekly.parquet`, `returns_weekly.parquet`
+- `factor_validation_stats.parquet`, `gx5y_full_factor_zoo`, `universe_manifest.json`
+
+---
+
+## Research progression and key findings
+
+### Stage 04 — RAAM v2 composite
+IC results: VolC=+0.090, SMBC=+0.012, MomC=+0.026. T-factor silenced by ATR bug (A1). RAAM v2 validated VolC as the dominant signal.
+
+### Stage 05 — BTC direction model
+Best classifier: `l1__random_forest`, balanced accuracy 53.94%. Best trading: `all__gradient_boosting`, Sharpe 1.82. Directional models don't add enough to justify complexity.
+
+### Stage 06 — Artemis econometrics
+`plus_lat` model (Artemis + latent controls): IC IR=+0.54, LS Sharpe=+3.74 (16 OOS weeks only). `plus_net` was weak (IC IR=+0.20). Latent controls matter.
+
+### Stage 07 — Hidden factor pricing
+Only `crypto_smb` survives GX latent controls (FMB t=2.19, latent-adj t=1.97). Most factors don't survive hidden-factor adjustment — validated the need for proper GX pricing in the main pipeline.
+
+### Stage 08 — NALFP v3
+IC-weighted three-pillar design (network dynamics, GX factor zoo, IC-weighted combination). OOS Sharpe +1.24 over 24-week OOS. Low-vol and low-drawdown but lagged benchmarks on raw return. VolC dominated at ~44% weight.
+
+### Stage 09 — NALFP Additional (production data pipeline)
+
+Comprehensive factor validation framework. Deprecated `09_gx_pricing.py` (single-cross-section FMB shortcut with wrong SEs); all GX t-stats come from `09c_gx_pricing_full.py`.
+
+Key design: market cap before ~2025 reconstructed as price × emissions-anchored supply, drift clamped to −3%/yr to +50%/yr per-day (supply clip bug fixed per audit Finding 3).
+
+**Factor validation results:**
+
+| Factor | IC (IS / OOS) | GX t-stat | ASD vs BTC | Grade |
+|---|---|---:|---|---|
+| VolC | −3.32 / −4.31 | −5.05 | No | Confirmed |
+| MAXRET | −3.49 / −4.05 | +5.52 | No | Confirmed |
+| RMOM1w | Weak | +1.86 | Yes (all 3 windows) | Priced risk |
+| RMOM2w | IS yes / OOS weak | +1.05 | Yes | Suggestive |
+| SMBC | Weak | +0.36 | Yes | Suggestive |
+| NetRel | Weak | −0.01 | Yes | Suggestive |
+| MispricingM | Composite | n/a | Yes (all 3 windows, ε₂=0.000) | Composite |
+
+**MispricingM** = equal-weight of RMOM1w + RMOM2w + SMBC + NetRel. Dominant alpha source. Confirmed to ASD-dominate BTC in IS, full sample, and OOS windows separately.
+
+### Stage 10 — Behavioral GX search
+
+Searched 182 candidate specifications (91 features × 2 directions). 102 cleared uncorrected |t| ≥ 2.0 (56% hit rate — exploratory mining). Applied Bonferroni (|t| > 3.64) and Benjamini-Hochberg (q < 0.001) corrections. Four factors survived both:
+
+| Factor | GX t-stat | Story |
+|---|---:|---|
+| CRASH8 | +4.79 | Rebound from deep crash |
+| BETA26 | +4.60 | High-beta risk |
+| SKEW52 | +3.44 | Lottery/skewness demand |
+| NEWC | +3.43 | Newer-coin seasoning |
+
+Re-priced IS/OOS separately — standalone single-window premia are weak. Used only as a small capped Priced Tilt sleeve.
+
+### Stage 13 — Regime-conditioned factor portfolios (Appendix A)
+
+Tested Plan A (economic classifier: dispersion + BTC dominance) and Plan B (HMM). OOS 79 weeks: Plan A +0.19 Sharpe, Plan B +0.36 Sharpe vs BTC −0.33. Regimes help risk control but can't be the whole strategy.
+
+### Stage 14 — XGBoost regime strategy (Appendix B)
+
+XGBoost regime classifier (RiskOff / Neutral / RiskOn). Best variant (Sharpe-optimized): OOS Sharpe +0.61. More complex variants failed: Return-optimized −0.52, Neural-network −0.46. Lesson: complexity hurts OOS robustness.
+
+### Stage 15 — Factor Ensemble Strategy (FINAL SUBMISSION)
+
+Three-book ensemble with causal rolling-performance allocator + XGBoost regime sizing.
+
+| Book | Inputs | Role |
+|---|---|---|
+| MispricingM | RMOM1w, RMOM2w, SMBC, NetRel | Main alpha |
+| Core Rank | VolC, MAXRET | Statistical backbone |
+| Priced Tilt | CRASH8, BETA26, TVLC, SKEW52, NEWC | Capped sleeve (net OOS drag) |
+
+**Out-of-sample results (final 79 weeks, bull→bear transition):**
+
+| Strategy | Sharpe | Annual return | Volatility | Max drawdown |
+|---|---:|---:|---:|---:|
+| Sharpe Ensemble | +0.84 | +29.9% | 35.8% | −24.7% |
+| Defensive Ensemble | +0.75 | +21.6% | 29.0% | −19.7% |
+| Balanced Ensemble | +0.68 | +18.8% | 27.6% | −18.3% |
+| MispricingM only | +0.85 | +37.2% | 44.1% | −29.9% |
+| Bitcoin | −0.33 | −12.3% | 37.7% | −46.7% |
+| Equal-weight market | −0.51 | −34.4% | 67.2% | −68.3% |
+
+**Ablation findings:**
+- Removing Priced Tilt → OOS Sharpe +0.90 (sleeve is a net drag — production version should run it near-zero)
+- Removing regime tilt → OOS Sharpe +0.80 (small but real benefit)
+- MispricingM alone = OOS Sharpe +0.85 (strategy is effectively single-factor; other books control vol/drawdown)
+- OOS Sharpe range across full regime-tilt × priced-cap grid: +0.80 to +0.91 (robust to priors)
+
+IS→OOS Sharpe decay: SE 1.36 → 0.84 (~38%), DE 1.31 → 0.75 (~43%), BE 1.28 → 0.68 (~47%). Compared to neural-network optimizer 2.06 → −0.46 — the ensemble is much more robust.
+
+---
+
+## Reports and audit
+
+`16_reports/Artemis_Track1_Research_Report.md` — final competition report  
+`16_reports/AUDIT_AND_FINDINGS_REPORT.md` — 13 findings, all production-pipeline findings resolved
+
+Key resolved findings:
+- Finding 1/2: Bonferroni + BH corrections added for behavioral search
+- Finding 3: Supply drift clip bug fixed (−3%/yr to +50%/yr band)
+- Finding 4: ASD now computed on IS, full, and OOS windows separately
+- Finding 5: Regime-tilt sensitivity grid added
+- Finding 6: Priced Tilt ablation showing it is OOS drag
+- Finding 8: `09_gx_pricing.py` deprecated with runtime warning
+- Finding 9: Leakage-free forward-fill in GX engine
+- Finding 12: Pipeline provenance documented in README
+
+---
+
+## Research design rules (carry forward from 10-paper review)
+
+1. TVL alone is not alpha. Use only as denominator: fees/TVL, revenue/TVL, fees/mcap.
+2. Quality-adjusted Artemis metrics beat raw. Prefer `real_txns`, `real_volume`; penalize `pct_gamed_*`.
+3. Factor premia need GX latent-factor survival testing before being credited.
+4. No shuffle-based CV. Always chronological splits.
+5. Multiple-testing corrections required for any search over >10 factor specifications.
+6. Model complexity trades off against OOS robustness in short crypto histories. Prefer simpler.
+
+---
+
+## Current work
+
+- [ ] Stage 17: HTML presentation deck (not started)
+- [x] Stage 16: Reports folder created, all reports moved
+- [x] Stage 15: Final ensemble with ablations — complete
+- [x] Audit: All 13 findings addressed
+- [x] CLAUDE.md, AGENTS.md, and MEMORY.md created/updated
