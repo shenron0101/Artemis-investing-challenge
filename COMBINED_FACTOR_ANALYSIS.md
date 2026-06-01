@@ -142,6 +142,40 @@ Once we have clusters, two factors fall out naturally:
   flows out of, say, payments and into AI coins, the AI cluster is pulling ahead
   of the rest, and NetRel backs that rotation.
 
+#### Seeing it — the actual network
+
+Here is a real network built with exactly this pipeline (Spearman → distance → MST
+→ Louvain) on a 52-week slice of this project's own data. Each dot is a coin, each
+line is a strong correlation kept by the MST, and each colour is a Louvain cluster.
+Notice how the algorithm pulls coins into a handful of distinct knots purely from
+how they co-move:
+
+![Coin correlation network with Louvain clusters](figures/network_clusters.png)
+
+*Clusters are labelled neutrally (A, B, C…) on purpose: over a short window the
+data-driven groups won't line up perfectly with tidy human narratives like "all
+the L1s," so we don't pretend they do. The point is that **structure exists** — the
+market really does move in blocs.*
+
+Now the two factors become literally visible. **NetMom** works *inside one colour*;
+**NetRel** works *between colours*:
+
+![NetMom vs NetRel illustrated on the network](figures/netmom_netrel_schematic.png)
+
+- **Left (NetMom):** zoom into a single cluster (here Cluster A). Everyone in it
+  shares the same "narrative beta," so we ignore the shared move and just ask *which
+  coin is out-trending its own clustermates?* — go long that local leader, short the
+  local laggard. The bet is purely on **idiosyncratic** trend within the bloc.
+- **Right (NetRel):** step back and compare *whole clusters*. When one bloc's
+  average momentum pulls ahead of the others (green), money is rotating **into** that
+  narrative; the lagging bloc (red) is rotating out. NetRel goes long the leading
+  cluster's coins and short the lagging cluster's — a bet on **narrative rotation**,
+  not on any single coin.
+
+*(Both pictures are produced by `figures/make_network_viz.py`, re-runnable any time.
+The numbers shown, e.g. "4w mom +127%", are the trailing 4-week returns at the
+snapshot's last week, used only to pick the illustrative long/short legs.)*
+
 #### What is SPC (Sparse PCA)?
 
 Start with ordinary **PCA (Principal Component Analysis)**. PCA looks at how all

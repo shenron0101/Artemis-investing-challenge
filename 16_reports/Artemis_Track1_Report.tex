@@ -11,7 +11,7 @@
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{6pt plus 2pt minus 1pt}
 
-% ── Colour Palette (Beige Thme) ─────────────────────────────────────
+% ── Colour Palette (Beige Theme) ─────────────────────────────────────
 \usepackage{xcolor}
 \definecolor{beigeback}{HTML}{F5F0E8}
 \definecolor{beigedark}{HTML}{C9B99A}
@@ -80,6 +80,9 @@
 \usepackage{textcomp}
 \usepackage{amsmath}
 \usepackage{amssymb}
+\newcommand{\ieeecite}[1]{\hyperref[ref:#1]{[\ref*{ref:#1}]}}
+\newcommand{\ieeecitetwo}[2]{\hyperref[ref:#1]{[\ref*{ref:#1}]}, \hyperref[ref:#2]{[\ref*{ref:#2}]}}
+\newcommand{\ieeecitethree}[3]{\hyperref[ref:#1]{[\ref*{ref:#1}]}, \hyperref[ref:#2]{[\ref*{ref:#2}]}, \hyperref[ref:#3]{[\ref*{ref:#3}]}}
 
 % ── Custom Environments ───────────────────────────────────────────────
 \usepackage{tcolorbox}
@@ -111,7 +114,7 @@
   {\small\color{beigeaccent} Research Period: 2017--2026\\[3pt]
   In-Sample: 2021-05-10 \;\textendash\; 2024-11-11\\[3pt]
   Out-of-Sample: 2024-11-18 \;\textendash\; 2026-05-25\\[3pt]
-  79\;Weeks Out-of-Sample \;\textendash\; $\sim$113 Crypto Assets}
+  79\;weeks out-of-sample \;\textendash\; $\sim$113 Crypto Assets}
 \end{center}
 \vfill
 \begin{center}
@@ -129,12 +132,12 @@
 \section{Executive Summary}
 % ══════════════════════════════════════════════════════════════════════
 
-This report presents a systematic crypto factor rebalancing strategy for Track\,1 of the Artemis Quant Competition.\footnote{A \emph{factor} is a measurable asset characteristic used to predict or explain cross-sectional returns. The concept is central to modern asset-pricing research, including Fama and French (1993), Carhart (1997), and the crypto studies reviewed herein.} The objective is to construct a rules-based portfolio that can be explained economically, tested statistically, and rebalanced on a \textbf{fixed weekly schedule}.\footnote{\emph{Out-of-sample} refers to a time period reserved for testing after all design choices have been made. This is the standard method for reducing overfitting risk, though a single holdout window remains a limited test.}
+This report presents a systematic crypto factor rebalancing strategy for Track\,1 of the Artemis Quant Competition.\footnote{A \emph{factor} is a measurable asset characteristic used to predict or explain cross-sectional returns. The concept is central to modern asset-pricing research.\ieeecitetwo{fama-french-1993}{carhart-1997}} The objective is to construct a rules-based portfolio that can be explained economically, tested statistically, and rebalanced on a \textbf{fixed weekly schedule}.\footnote{\emph{Out-of-sample} refers to a time period reserved for testing after all design choices have been made. This is the standard method for reducing overfitting risk, though a single holdout window remains a limited test.}
 
 The core idea is simple: identify measurable characteristics of crypto assets that predict relative returns, combine them into a portfolio, and rebalance weekly. The implementation, however, requires careful attention to multiple-testing discipline, regime-aware risk sizing, and honest assessment of what the data actually supports versus what it merely suggests.
 
 \begin{keyfinding}[title=Headline Result]
-The \textbf{Sharpe Ensemble} achieves an out-of-sample Sharpe ratio of $+0.84$ (annualized return $+29.9\%$, volatility $35.8\%$, max drawdown $-24.7\%$) across 79\;weeks of held-out data from November 2024 to May 2026. Bitcoin returned $-12.3\%$ annualized over the same period, and the equal-weight market lost $-34.4\%$ annualized.
+The \textbf{Sharpe Ensemble} achieves an out-of-sample Sharpe ratio of $+0.84$ (annualized return $+29.9\%$, volatility $35.8\%$, max drawdown $-24.7\%$) across 79\;weeks of held-out data from November 2024 to May 2026. Bitcoin returned $-12.3\%$ annualized over the same period, and the equal-weight market returned $-34.4\%$ annualized.
 \end{keyfinding}
 
 However, honest decomposition shows that this Sharpe ratio depends heavily on a single composite factor (MispricingM) and that the Priced Tilt sub-book is a net drag out-of-sample. The strategy is therefore best described as a \emph{single-factor portfolio with volatility and drawdown controls}, not a genuinely diversified multi-factor book. All limitations are discussed openly.
@@ -156,29 +159,29 @@ Term & Definition & Key Reference \\
 \endhead
 \bottomrule
 \endlastfoot
-Factor & A rule that ranks or tilts assets using a characteristic such as volatility, size, momentum, or drawdown & Fama \& French (1993); Han et al.\,(2024) \\
-Rebalancing & Periodically updating portfolio weights; this project rebalances weekly & DeMiguel et al.\,(2009) \\
-IC & Information coefficient: the rank correlation between a factor score and next-period returns & Spearman (1904); Grinold \& Kahn (2000) \\
-Newey-West $t$ & A significance measure adjusted for autocorrelation and heteroskedasticity & Newey \& West (1987) \\
-ASD & Almost stochastic dominance: a distributional test suited to non-normal returns & Leshno \& Levy (2002); Han et al.\,(2024) \\
-GX pricing & Giglio-Xiu latent-factor pricing: tests risk premia controlling for hidden common factors & Giglio \& Xiu (2021) \\
-Sharpe ratio & Return per unit of volatility & Sharpe (1966) \\
-Max drawdown & Largest peak-to-trough portfolio loss during the test window & Magdon-Ismail \& Atiya (2004) \\
-XGBoost & Gradient-boosted tree model used here to estimate regime probabilities & Chen \& Guestrin (2016) \\
-Risk premium & Extra expected return for bearing systematic risk & Fama \& French (1993) \\
-Latent factor & A hidden common risk extracted statistically from returns & Giglio \& Xiu (2021) \\
-Overfitting & Fitting historical noise rather than a repeatable relationship & Chen \& Guestrin (2016); Brigida (2026) \\
-Survivorship bias & Data problem where failed or delisted assets are missing from the historical universe & Han et al.\,(2024); Brigida (2026) \\
-TVL & Total value locked: a DeFi usage metric, not a reliable standalone alpha signal & Brigida (2025, 2026) \\
-VolC & Volatility characteristic: a low-volatility crypto ranker & Frazzini \& Pedersen (2014) \\
-MAXRET & Maximum recent return: a lottery-reversal signal & Bali et al.\,(2011); Han et al.\,(2024) \\
-RMOM & Risk-adjusted momentum: recent return scaled by recent volatility & Han et al.\,(2024) \\
-SMBC & Small-minus-big crypto size factor & Fama \& French (1993); Brigida (2026) \\
-NetRel & Network-relative signal comparing a coin with related coins & Guo et al.\,(2024) \\
-CRASH8 & Rebound signal for deeply crashed coins & Han et al.\,(2024) \\
-BETA26 & High-beta crypto risk tilt & Frazzini \& Pedersen (2014); Brigida (2026) \\
-SKEW52 & Skewness or lottery-like payoff tilt & Bali et al.\,(2011) \\
-NEWC & Newer-coin seasoning tilt & Han et al.\,(2024); Brigida (2026) \\
+Factor & A rule that ranks or tilts assets using a characteristic such as volatility, size, momentum, or drawdown & \ieeecitetwo{fama-french-1993}{han-2024} \\
+Rebalancing & Periodically updating portfolio weights; this project rebalances weekly & \ieeecite{demiguel-2009} \\
+IC & Information coefficient: the rank correlation between a factor score and next-period returns & \ieeecitetwo{spearman-1904}{grinold-kahn-2000} \\
+Newey-West $t$ & A significance measure adjusted for autocorrelation and heteroskedasticity & \ieeecite{newey-west-1987} \\
+ASD & Almost stochastic dominance: a distributional test suited to non-normal returns & \ieeecitetwo{leshno-levy-2002}{han-2024} \\
+GX pricing & Giglio-Xiu latent-factor pricing: tests risk premia controlling for hidden common factors & \ieeecite{giglio-xiu-2021} \\
+Sharpe ratio & Return per unit of volatility & \ieeecite{sharpe-1966} \\
+Max drawdown & Largest peak-to-trough portfolio loss during the test window & \ieeecite{magdon-ismail-atiya-2004} \\
+XGBoost & Gradient-boosted tree model used here to estimate regime probabilities & \ieeecite{chen-guestrin-2016} \\
+Risk premium & Extra expected return for bearing systematic risk & \ieeecite{fama-french-1993} \\
+Latent factor & A hidden common risk extracted statistically from returns & \ieeecite{giglio-xiu-2021} \\
+Overfitting & Fitting historical noise rather than a repeatable relationship & \ieeecitetwo{chen-guestrin-2016}{brigida-2026} \\
+Survivorship bias & Data problem where failed or delisted assets are missing from the historical universe & \ieeecitetwo{han-2024}{brigida-2026} \\
+TVL & Total value locked: a DeFi usage metric, not a reliable standalone alpha signal & \ieeecitetwo{brigida-2025}{brigida-2026} \\
+VolC & Volatility characteristic: a low-volatility crypto ranker & \ieeecite{frazzini-pedersen-2014} \\
+MAXRET & Maximum recent return: a lottery-reversal signal & \ieeecitetwo{bali-2011}{han-2024} \\
+RMOM & Risk-adjusted momentum: recent return scaled by recent volatility & \ieeecite{han-2024} \\
+SMBC & Small-minus-big crypto size factor & \ieeecitetwo{fama-french-1993}{brigida-2026} \\
+NetRel & Network-relative signal comparing a coin with related coins & \ieeecite{guo-2024} \\
+CRASH8 & Rebound signal for deeply crashed coins & \ieeecite{han-2024} \\
+BETA26 & High-beta crypto risk tilt & \ieeecitetwo{frazzini-pedersen-2014}{brigida-2026} \\
+SKEW52 & Skewness or lottery-like payoff tilt & \ieeecite{bali-2011} \\
+NEWC & Newer-coin seasoning tilt & \ieeecitetwo{han-2024}{brigida-2026} \\
 \end{longtable}
 
 \smallskip
@@ -225,7 +228,7 @@ The universe is drawn from CoinGecko market-capitalization rankings, with delibe
 \subsection{Why This Universe?}
 
 \textbf{Efficiency and coverage gaps.}\;
-The largest crypto assets (top\;20 by market cap) are subject to intensive analyst coverage, institutional arbitrage via ETF flows, and deep on-chain surveillance. Cross-sectional factor premia in these names are likely compressed by the same mechanism that erodes anomalies in large-cap equities (McLean and Pontiff, 2016). By extending into the upper-mid-cap tier (\#20--\#120), the universe captures assets where information asymmetry is structurally higher---fewer dedicated analysts, thinner institutional ownership, more heterogeneous investor bases---precisely the conditions under which behavioral mispricings persist.
+The largest crypto assets (top\;20 by market cap) are subject to intensive analyst coverage, institutional arbitrage via ETF flows, and deep on-chain surveillance. Cross-sectional factor premia in these names are likely compressed by the same mechanism that erodes anomalies in large-cap equities.\ieeecite{mclean-pontiff-2016} By extending into the upper-mid-cap tier (\#20--\#120), the universe captures assets where information asymmetry is structurally higher---fewer dedicated analysts, thinner institutional ownership, more heterogeneous investor bases---precisely the conditions under which behavioral mispricings persist.
 
 \textbf{Execution feasibility.}\;
 Extending below the top\;120 into micro-cap crypto introduces severe capacity constraints. Daily trading volumes below \$1\;M create market-impact costs exceeding 100\;bps per trade, rendering paper factor premia untradeable at any meaningful scale. The chosen universe ensures that most constituents trade above \$5\;M daily volume on major exchanges, keeping estimated one-way execution costs in the 10--30\;bps range for institutional-sized orders.
@@ -237,7 +240,7 @@ Factor strategies require sufficient return dispersion across assets to generate
 
 The primary validation window is anchored in May\;2021 to leverage a robust five-year data history while enforcing strict liquidity and survivorship controls. Assets are restricted to a minimum market capitalization of \$100\;M; any coin falling below this threshold is dynamically excluded from the following week's eligible list and its positions are immediately closed.
 
-Crucially, this five-year timeline captures the profound post-COVID structural transformation of the crypto asset class. By training the strategy through the retail-driven speculative excess of 2021 and the systemic contagion of 2022, and validating it against the institutionalized, ETF-driven landscape of 2024--2026, we ensure that our factors demonstrate resilience across both historic liquidity crises and a permanently altered market structure.
+Crucially, this five-year timeline captures the profound post-COVID structural transformation of the crypto asset class. By training the strategy through the retail-driven speculative excess of 2021 and the systemic contagion of 2022, and validating it against the institutionalized, ETF-driven landscape of 2024--2026, we ensure that our factors demonstrate resilience across both historical liquidity crises and a permanently altered market structure.
 
 The strategy excludes stablecoins, wrapped duplicates, and very low-quality assets wherever possible. Stablecoins lack the risk-return profile of volatile crypto assets. Wrapped assets duplicate exposures already present in the universe. Very illiquid assets produce paper profits that may not be tradable after accounting for slippage.
 
@@ -251,236 +254,407 @@ The strategy begins with factor discovery. A factor is useful only if it passes 
 
 The information coefficient is the Spearman rank correlation between a factor's cross-sectional scores at week~$t$ and the realized returns at week~$t{+}1$. A positive direction-adjusted IC means the factor's bet ranked next-week winners above next-week losers. Typical useful ICs in crypto are small ($|\text{IC}| \approx 0.03$--$0.05$) because the asset class is noisy, but even small ICs compound into meaningful alpha when applied consistently across 50+ assets each week.
 
-An important subtlety: some factors go \emph{long the bottom} of their characteristic sort. VolC, for example, buys low-volatility coins, so its raw IC against the volatility characteristic is \emph{negative}---which is the factor \emph{working}, not failing. All IC results are reported direction-raw; the sign should be read against the factor's intended bet direction. Statistical significance is assessed via Newey-West $t$-statistics with 4\;lags, which correct for the serial correlation and heteroskedasticity endemic in weekly crypto return series (Newey and West, 1987).
+An important subtlety: some factors go \emph{long the bottom} of their characteristic sort. VolC, for example, buys low-volatility coins, so its raw IC against the volatility characteristic is \emph{negative}---which is the factor \emph{working}, not failing. All IC results are reported direction-raw; the sign should be read against the factor's intended bet direction. Statistical significance is assessed via Newey-West $t$-statistics with 4\;lags, which correct for the serial correlation and heteroskedasticity endemic in weekly crypto return series.\ieeecite{newey-west-1987}
 
 \subsection{Test\,2 --- Almost Stochastic Dominance (ASD)}
 
 The Sharpe ratio implicitly assumes normally distributed returns. Crypto factor returns are not: every factor in our panel rejects the Jarque-Bera normality test at the 5\% level, with excess kurtosis ranging from $+1.1$ to $+19.3$ and skewness from $-1.0$ to $+3.1$. Under these conditions, the Sharpe ratio understates tail risk and can rank strategies incorrectly.
 
-Almost stochastic dominance (Leshno and Levy, 2002) avoids this by comparing entire return distributions without parametric assumptions. The test produces two violation measures:
+Almost stochastic dominance avoids this by comparing entire return distributions without parametric assumptions.\ieeecite{leshno-levy-2002} The test produces two violation measures:
 
 \begin{itemize}[nosep]
   \item $\varepsilon_1$ (AFSD): if $\varepsilon_1 \leq 5.9\%$, the factor \emph{almost first-order stochastically dominates} Bitcoin---meaning \emph{all} investors, regardless of risk preference, would prefer the factor's return distribution.
   \item $\varepsilon_2$ (ASSD): if $\varepsilon_2 \leq 3.2\%$, the factor \emph{almost second-order dominates} Bitcoin---meaning all \emph{risk-averse} investors would prefer it.
 \end{itemize}
 
-Han et al.\,(2024) apply this framework to cryptocurrency factor portfolios and demonstrate that several factors dominate benchmarks under ASD even when their Sharpe ratios are unremarkable, making ASD the appropriate test for fat-tailed crypto returns.
+Recent crypto factor work applies this framework to cryptocurrency factor portfolios and demonstrates that several factors dominate benchmarks under ASD even when their Sharpe ratios are unremarkable, making ASD the appropriate test for fat-tailed crypto returns.\ieeecite{han-2024}
 
 \subsection{Test\,3 --- Giglio-Xiu Latent-Factor Pricing (GX)}
 
-The first two tests ask whether a factor \emph{works as a trading signal}. The Giglio-Xiu test asks a fundamentally different question: is the factor a \emph{priced source of systematic risk} in the cross-section? A factor is ``priced'' if assets that load more heavily on it earn systematically different expected returns---a risk premium, denoted~$\lambda$ (Giglio and Xiu, 2021).
+The first two tests ask whether a factor \emph{works as a trading signal}. The Giglio-Xiu test asks a fundamentally different question: is the factor a \emph{priced source of systematic risk} in the cross-section? A factor is ``priced'' if assets that load more heavily on it earn systematically different expected returns---a risk premium, denoted~$\lambda$.\ieeecite{giglio-xiu-2021}
 
 Three pricing methods are run side by side to triangulate the evidence:
 
 \begin{enumerate}[nosep]
-  \item \textbf{Fama-MacBeth (FMB)}: week-by-week cross-sectional regressions of returns on factor betas, averaging the estimated risk premia~$\lambda_t$ across weeks with Newey-West standard errors. This is the standard approach (Fama and MacBeth, 1973) but is noisy when the number of factors approaches the number of assets per week.
+  \item \textbf{Fama-MacBeth (FMB)}: week-by-week cross-sectional regressions of returns on factor betas, averaging the estimated risk premia~$\lambda_t$ across weeks with Newey-West standard errors. This is the standard approach\ieeecite{fama-macbeth-1973} but is noisy when the number of factors approaches the number of assets per week.
   \item \textbf{GX observed-only}: a single cross-sectional regression on time-series average returns using heteroskedasticity-robust standard errors. More stable than FMB but ignores the possibility that omitted common risks contaminate the estimates.
-  \item \textbf{GX full} (Giglio and Xiu, 2021): the most credible specification. After initial pricing, Bai-Ng information criteria select~$K$ hidden latent factors from the pricing residuals. Betas are then re-estimated on the combined observed~+ hidden factor set, and risk premia are re-priced. This removes contamination from unobserved systematic forces that would otherwise inflate or deflate the estimated~$\lambda$ for the observed factors.
+  \item \textbf{GX full}: the most credible specification.\ieeecite{giglio-xiu-2021} After initial pricing, Bai-Ng information criteria select~$K$ hidden latent factors from the pricing residuals. Betas are then re-estimated on the combined observed~+ hidden factor set, and risk premia are re-priced. This removes contamination from unobserved systematic forces that would otherwise inflate or deflate the estimated~$\lambda$ for the observed factors.
 \end{enumerate}
 
 The GX-full $t$-statistic is the primary pricing metric reported throughout. A factor with $|t_{\text{gx}}| \geq 1.65$ is considered a statistically meaningful priced risk.
 
-\subsection{Why the Sharpe Ratio Misleads for Crypto}
+\subsection{From Tests to Portfolio Routes}
+
+The three tests are not averaged into one score. They answer different questions, so they route factors to different jobs:
+
+\begin{enumerate}[nosep]
+  \item \textbf{Economic story required}: a factor needs a plausible mechanism before it is tested.
+  \item \textbf{IC route}: factors with robust in-sample and out-of-sample ranking power become weekly rankers.
+  \item \textbf{ASD route}: factors whose return distributions dominate Bitcoin become distributional mispricing candidates.
+  \item \textbf{GX route}: factors that remain priced after observed and hidden risks are controlled for become priced-risk candidates.
+  \item \textbf{Control route}: market, sparse-PCA, and macro-spanned directions are retained as pricing controls, not alpha trades.
+\end{enumerate}
+
+This is the central design choice. A weak IC does not automatically eliminate a factor, and a strong GX statistic does not automatically justify a large allocation. The test that a factor passes determines the job it is allowed to perform.
+
+% ══════════════════════════════════════════════════════════════════════
+\section{Factor Economics and Evidence}
+% ══════════════════════════════════════════════════════════════════════
+
+\subsection{The Economic Question}
+
+Every factor starts with the same question: why would this trade pay? The answer cannot be ``because the backtest liked it.'' A factor is a repeated long--short trade, and the economic story determines both the direction of the trade and the test it should be judged by. The factors fall into five families.
+
+\subsection{Classic Risk and Anomaly Factors}
 
 \begin{center}
 \small
-\begin{tabular}{lrrcrr}
+\begin{tabularx}{\textwidth}{L{0.14\textwidth}L{0.25\textwidth}X}
 \toprule
 \rowcolor{tablehead}
-\textbf{Factor} & \textbf{IS\;skew} & \textbf{IS\;excess kurt.} & \textbf{Non-normal?} & \textbf{OOS\;skew} & \textbf{OOS\;excess kurt.} \\
+\textbf{Factor} & \textbf{Trade} & \textbf{Why it might pay} \\
 \midrule
-SMBC    & $+2.08$ & $+9.52$ & yes & $+0.87$ & $+2.25$ \\
-VolC    & $-0.75$ & $+1.13$ & yes & $-1.01$ & $+2.66$ \\
-RMOM1w  & $+1.57$ & $+6.53$ & yes & $+0.18$ & $+2.43$ \\
-RMOM2w  & $+0.29$ & $+2.07$ & yes & $+0.98$ & $+3.63$ \\
-NetRel  & $+0.61$ & $+3.02$ & yes & $-0.24$ & $-0.07$ \\
-MAXRET  & $+1.13$ & $+2.59$ & yes & $+0.96$ & $+2.03$ \\
-MomC    & $+0.76$ & $+3.76$ & yes & $-0.24$ & $-0.06$ \\
+RC & Hold the whole crypto market, value-weighted & This is the crypto market premium: compensation for bearing systematic crypto risk. It is not alpha because every long-only holder already earns it. We include RC so the other factors are measured net of market beta. \\
+SMBC & Long small coins, short big coins & Small caps are less liquid, less covered, and riskier, so they should require extra expected return. This is the crypto version of the Fama--French SMB effect, though it can invert during ``flight to quality'' periods when capital crowds into BTC and ETH.\ieeecite{fama-french-1993} \\
+MomC & Long 4-week winners, short losers & Investors can under-react to news, so recent winners may keep winning.\ieeecite{jegadeesh-titman-1993} In crypto, raw momentum also crashes violently when trends reverse. \\
+VolC & Long calm coins, short volatile coins & Leverage-constrained and lottery-seeking investors can overpay for exciting high-volatility names, leaving lower-volatility coins cheap. This is the crypto analogue of betting against beta.\ieeecite{frazzini-pedersen-2014} \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{center}
-\smallskip
-{\small Table\,1.\;Distribution statistics for tradable factor returns. Every factor rejects normality, validating the use of ASD over Sharpe-based factor selection.}
 
-\subsection{Factor Groups and Grading}
+\subsection{Risk-Adjusted Momentum and Lottery Reversal}
 
-\begin{center}
-\begin{tabular}{lll}
-\toprule
-\rowcolor{tablehead}
-\textbf{Factor group} & \textbf{Factors} & \textbf{Role in portfolio} \\
-\midrule
-Weekly rankers          & VolC, MAXRET                          & Core Rank book \\
-Mispricing composite   & RMOM1w, RMOM2w, SMBC, NetRel          & Combined into MispricingM \\
-Priced-risk tilts      & CRASH8, BETA26, TVLC, SKEW52, NEWC   & Capped risk-premia sleeve \\
-\bottomrule
-\end{tabular}
-\end{center}
-\smallskip
-{\small Table\,2.\;Factor groups and their portfolio roles.}
-
-The strongest single-factor evidence is for VolC and MAXRET. VolC favors lower-volatility coins. MAXRET fades coins with large recent return spikes. Both factors have statistically significant IC results in-sample and out-of-sample.
-
-\subsection{Non-Binary Grading Scale}
-
-Each factor is graded on a deliberately non-binary scale. A 264-week crypto panel cannot deliver $|t| \geq 2$ on every test for every factor, and collapsing three independent tests into a single pass/fail bar discards most of what the analysis reveals. The grading scale weighs all three tests against each factor's standalone economic rationale:
-
-\begin{center}
-\begin{tabular}{lp{11cm}}
-\toprule
-\rowcolor{tablehead}
-\textbf{Grade} & \textbf{Meaning} \\
-\midrule
-\textbf{Confirmed}    & Significant on IC ranking, GX pricing, or both---every test registers it as a strong, real factor \\
-\textbf{Priced risk}   & Compensated systematic exposure (significant GX~$\lambda$), but no reliable week-to-week ranking edge \\
-\textbf{Suggestive}    & Economic story intact with partial or semi-significant evidence on at least one test \\
-\textbf{Not supported} & Fails its own economic prediction on this sample \\
-\bottomrule
-\end{tabular}
-\end{center}
-\smallskip
-{\small A ``Suggestive'' grade does not mean the factor is worthless---it means the evidence is partial. A factor that almost-stochastically dominates Bitcoin (ASD) but has weak weekly IC is economically useful for distributional portfolio construction, even though it would be discarded by a pure IC screen. This distinction is critical for understanding why MispricingM---graded ``Suggestive'' on a per-factor basis---becomes the strategy's dominant alpha source: its strength lies in distributional superiority across the full return distribution, not in week-to-week ranking precision.}
+Risk-adjusted momentum divides a recent trend by the coin's own recent volatility, which makes the signal closer to a short-horizon Sharpe ratio. The purpose is to strip out the noise that makes raw momentum unstable in crypto.
 
 \begin{center}
 \small
-\begin{longtable}{llcrl}
+\begin{tabularx}{\textwidth}{L{0.16\textwidth}X}
 \toprule
 \rowcolor{tablehead}
-\textbf{Factor} & \textbf{Evidence summary} & \textbf{GX\;$t$} & \textbf{ASD} & \textbf{Grade} \\
+\textbf{Factor} & \textbf{Trade} \\
+\midrule
+RMOM1w & Long coins with high 1-week return divided by 4-week volatility. \\
+RMOM2w & Long coins with high 2-week return divided by 4-week volatility. \\
+RMOM4w & Long coins with high 4-week return divided by 4-week volatility. \\
+MAXRET & Rank by the highest single weekly return in the last 4 weeks. An extreme up-week is a lottery signal: if investors overpay for the jackpot coin, the correct trade is to fade the lottery.\ieeecitetwo{bali-2011}{han-2024} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Fundamental Factors}
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{L{0.14\textwidth}L{0.25\textwidth}X}
+\toprule
+\rowcolor{tablehead}
+\textbf{Factor} & \textbf{Trade} & \textbf{Why it might pay} \\
+\midrule
+FunC & Long high fees-to-market-cap, short low & This is crypto value: protocols that generate real cash flow should be cheap relative to protocols that do not. The problem is coverage. Only about half the universe earns meaningful fees, so the factor is structurally under-powered. \\
+TVLC & Long high TVL-to-market-cap, short low & This captures DeFi engagement per dollar of market value. The bull case is usage-backed value; the bear case is TVL irrelevance because the information is already priced. The sign is genuinely ambiguous before testing.\ieeecite{brigida-2025} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Network and Structure Directions}
+
+Network and structure factors need more unpacking because they are not all buy/sell signals. Some describe how crypto assets move in blocs. These directions are useful for diversification and for pricing controls, but many are not alpha trades.
+
+\textbf{Coin networks.} A network is a set of dots connected by lines. Here each dot is a coin and each line means that two coins move together. We build the network from returns rather than drawing it by hand:
+
+\begin{enumerate}[nosep]
+  \item \textbf{Correlate every pair of coins.} On each rolling 12-week window, compute the Spearman rank correlation between every pair of coin returns. Spearman correlation is used because crypto has large outliers and rank correlation is less distorted by one extreme week.\ieeecite{spearman-1904}
+  \item \textbf{Turn correlation into distance.} Distance is $\sqrt{2(1-\rho)}$. Correlation $+1$ becomes distance 0, while unrelated coins sit farther apart.
+  \item \textbf{Keep the strongest skeleton.} A full graph connects every coin to every other coin and is too noisy. A minimum spanning tree keeps the smallest set of links needed to connect the universe, leaving the backbone of strongest relationships.
+  \item \textbf{Find communities.} Louvain clustering groups the tree into communities where coins are more connected to each other than to outsiders. The clusters often resemble crypto narratives, but the algorithm only sees co-movement.
+\end{enumerate}
+
+Once clusters exist, two network factors follow naturally. NetMom is within-cluster momentum: inside each cluster, it compares each coin's 4-week momentum with its clustermates and backs the local leader against the laggard. NetRel is cross-cluster rotation: it compares each coin or cluster against the rest of the market and backs the narrative bloc pulling ahead of the others. This follows the broader idea that crypto returns contain asset-specific and network-like components.\ieeecitetwo{liu-tsyvinski-2021}{guo-2024}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/network_clusters.png}
+\caption{Coin correlation network with Louvain clusters. The graph is built from this project's own return panel using the Spearman correlation, distance transform, minimum spanning tree, and Louvain community detection pipeline. Each dot is a coin, each line is a strong retained co-movement link, and each colour is a data-driven cluster.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/netmom_netrel_schematic.png}
+\caption{NetMom and NetRel illustrated on the same network. NetMom works inside one cluster by buying the local momentum leader and shorting the local laggard. NetRel works between clusters by buying coins in the leading narrative bloc and shorting coins in the lagging bloc. The figures are produced by \texttt{figures/make\_network\_viz.py}.}
+\end{figure}
+
+\textbf{Sparse PCA.} Ordinary PCA finds the main directions along which all coins move, but the resulting components load a little on many coins and are hard to interpret. Sparse PCA adds a penalty that pushes most loadings to zero, so each component loads on a smaller and more readable group. We extract four sparse components: SPC1 is a broad DeFi-majors or ``everything together'' direction; SPC2 is a payment and old-guard direction; SPC3 is an alt-L1 direction; and SPC4 is a legacy, privacy, and exchange-token direction. These are market-structure directions, not standalone trades.
+
+\textbf{CCA.} Canonical correlation analysis asks how much of crypto is macro in disguise. One side contains the crypto return panel; the other contains BTC, SPX, DXY, UST10Y, and VIX. CCA finds the crypto-side combinations most correlated with macro-side combinations. CCA1--CCA3 therefore measure the slices of crypto that move with equity risk appetite, the dollar, rates, and volatility. They are controls, not alpha bets.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{L{0.16\textwidth}L{0.24\textwidth}X}
+\toprule
+\rowcolor{tablehead}
+\textbf{Direction} & \textbf{What it represents} & \textbf{How to use it} \\
+\midrule
+NetMom & Within-cluster relative momentum & A coin-level signal: buy the local winner and short the local laggard inside the same narrative cluster. It removes the shared cluster move and tests idiosyncratic trend. \\
+NetRel & Cross-cluster narrative rotation & A rotation signal: buy coins in clusters pulling ahead of the rest of crypto and short coins in lagging clusters. It captures capital moving between narratives. \\
+SPC1--SPC4 & Sparse crypto-bloc directions & Risk controls: each component is a readable co-movement bloc such as broad market/DeFi-majors, payments, alt-L1s, or legacy/exchange exposure. \\
+CCA1--CCA3 & Macro-spanned crypto directions & Macro controls: these measure the part of crypto that moves with BTC, equities, the dollar, rates, and volatility. They prevent macro beta from being mistaken for crypto alpha. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+\smallskip
+{\small Table\,4.\;Summary of network and structure directions.}
+
+\subsection{Behavioral Factors}
+
+The behavioral factor search tested 182 candidate specifications, then kept only factors that were economically interpretable, distinct from renamed VolC/MAXRET variants, and robust to multiple-testing correction.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{L{0.13\textwidth}L{0.30\textwidth}X}
+\toprule
+\rowcolor{tablehead}
+\textbf{Factor} & \textbf{Trade} & \textbf{Investor behavior captured} \\
+\midrule
+NEWC & Long young coins, short seasoned coins & Newness or seasoning premium: investors demand compensation for holding less-proven assets. \\
+SKEW52 & Long high 52-week skew, short low & Lottery memory: investors remember salient right-tail jumps and overpay for coins with upside histories. \\
+CRASH8 & Long recently crashed coins, short resilient coins & Capitulation premium: freshly punished coins carry a priced rebound or crash-risk exposure. \\
+BETA26 & Long high 26-week beta, short low & Speculative risk-on demand: high-beta coins are what investors reach for when they want amplified crypto exposure. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Master Evidence Table}
+
+The table below puts every factor through the same evidence lenses. IC $t$-statistics measure weekly ranking power; ASSD marks whether the factor return distribution is preferred to Bitcoin by risk-averse investors; GX reports the full Giglio--Xiu priced-risk test after observed and hidden factors are controlled for.\ieeecite{giglio-xiu-2021}
+
+\begin{center}
+\scriptsize
+\setlength{\tabcolsep}{2.2pt}
+\begin{longtable}{C{0.03\textwidth}L{0.095\textwidth}L{0.105\textwidth}L{0.22\textwidth}R{0.065\textwidth}R{0.07\textwidth}C{0.06\textwidth}R{0.08\textwidth}R{0.055\textwidth}L{0.12\textwidth}}
+\toprule
+\rowcolor{tablehead}
+\textbf{\#} & \textbf{Factor} & \textbf{Family} & \textbf{Economic one-liner} & \textbf{IC IS $t$} & \textbf{IC OOS $t$} & \textbf{ASD} & \textbf{GX $\lambda$/yr} & \textbf{GX $t$} & \textbf{Grade} \\
 \midrule
 \endfirsthead
 \toprule
 \rowcolor{tablehead}
-\textbf{Factor} & \textbf{Evidence summary} & \textbf{GX\;$t$} & \textbf{ASD} & \textbf{Grade} \\
+\textbf{\#} & \textbf{Factor} & \textbf{Family} & \textbf{Economic one-liner} & \textbf{IC IS $t$} & \textbf{IC OOS $t$} & \textbf{ASD} & \textbf{GX $\lambda$/yr} & \textbf{GX $t$} & \textbf{Grade} \\
 \midrule
 \endhead
+1 & VolC & Anomaly & Low-vol beats high-vol & $-3.32$ & $-4.31$ & No & $-185.8\%$ & $-5.05$ & Confirmed \\
+2 & MAXRET & Lottery & Short the lottery max-return signal & $-3.49$ & $-4.05$ & No & $+160.0\%$ & $+5.52$ & Confirmed \\
+3 & CRASH8\textsuperscript{*} & Behavioral & Capitulation rebound & -- & -- & -- & $+177.9\%$ & $+4.79$ & Behavioral-confirmed \\
+4 & BETA26\textsuperscript{*} & Behavioral & Speculative risk-on demand & -- & -- & -- & $+122.8\%$ & $+4.60$ & Behavioral-confirmed \\
+5 & TVLC & Fundamental & DeFi engagement, TVL/mcap & -- & -- & -- & $-185.2\%$ & $-4.71$ & Priced risk \\
+6 & RC & Market & Crypto market premium & -- & -- & -- & $+217.2\%$ & $+3.92$ & Priced risk \\
+7 & SKEW52\textsuperscript{*} & Behavioral & Lottery memory, skew & -- & -- & -- & $+96.9\%$ & $+3.44$ & Behavioral-confirmed \\
+8 & NEWC\textsuperscript{*} & Behavioral & Newness and seasoning & -- & -- & -- & $+114.1\%$ & $+3.43$ & Behavioral-confirmed \\
+9 & RMOM1w & Risk-adj mom & 1-week Sharpe momentum & $-1.07$ & $-0.27$ & Yes & $+59.4\%$ & $+1.86$ & Priced risk \\
+10 & SMBC & Anomaly & Size, small minus big & $+1.49$ & $+1.25$ & Yes & $+9.6\%$ & $+0.36$ & Suggestive \\
+11 & NetRel & Structure & Cross-cluster rotation & $-1.72$ & $-0.10$ & Yes & $-0.2\%$ & $-0.01$ & Suggestive \\
+12 & RMOM2w & Risk-adj mom & 2-week Sharpe momentum & $-2.46$ & $-0.24$ & Yes & $+31.3\%$ & $+1.05$ & Suggestive \\
+13 & Mispricing\newline M & Composite & Equal-weight ASSD-dominant blend & -- & -- & Yes & -- & -- & Suggestive \\
+14 & FunC & Fundamental & Fees/mcap value & -- & -- & -- & $+6.6\%$ & $+0.40$ & Economic-only \\
+15 & RMOM4w & Risk-adj mom & 4-week Sharpe momentum & $-2.61$ & $-0.86$ & No & $+36.6\%$ & $+1.24$ & Not supported \\
+16 & MomC & Anomaly & Raw 4-week momentum & $-1.66$ & $+0.13$ & No & $-3.3\%$ & $-0.10$ & Not supported \\
+17 & NetMom & Structure & Within-cluster momentum & $-0.15$ & $-0.81$ & No & $+8.6\%$ & $+0.37$ & Not supported \\
+18 & SPC3 & Structure & Alt-L1 bloc direction & -- & -- & No & $-221.4\%$ & $-3.88$ & Structure \\
+19 & SPC1 & Structure & DeFi-majors bloc direction & -- & -- & No & $+57.6\%$ & $+1.08$ & Structure \\
+20 & SPC2 & Structure & Payment/old-guard direction & -- & -- & No & $-56.0\%$ & $-1.47$ & Structure \\
+21 & SPC4 & Structure & Legacy/exchange direction & -- & -- & No & $+93.5\%$ & $+1.42$ & Structure \\
+22 & CCA1 & Structure & Macro-spanned direction 1 & -- & -- & -- & $-55.0\%$ & $-0.58$ & Structure \\
+23 & CCA2 & Structure & Macro-spanned direction 2 & -- & -- & -- & $+6.6\%$ & $+0.58$ & Structure \\
+24 & CCA3 & Structure & Macro-spanned direction 3 & -- & -- & -- & $+14.9\%$ & $+0.58$ & Structure \\
 \bottomrule
-\endlastfoot
-VolC         & IC\;$t$: IS $-3.32$, OOS $-4.31$           & $-5.05$ & No  & Confirmed    \\
-MAXRET       & IC\;$t$: IS $-3.49$, OOS $-4.05$           & $+5.52$ & No  & Confirmed    \\
-CRASH8       & Priced-risk evidence                        & $+4.79$ & n/a & Priced risk  \\
-BETA26       & Priced-risk evidence                        & $+4.60$ & n/a & Priced risk  \\
-TVLC         & Priced-risk evidence                        & $-4.71$ & n/a & Priced risk  \\
-SKEW52       & Priced-risk evidence                        & $+3.44$ & n/a & Priced risk  \\
-NEWC         & Priced-risk evidence                        & $+3.43$ & n/a & Priced risk  \\
-RMOM1w       & Weak weekly IC; useful in distributional tests & $+1.86$ & Yes & Priced risk  \\
-RMOM2w       & IS IC, weak OOS IC; distributional tests     & $+1.05$ & Yes & Suggestive   \\
-SMBC         & Weak IC; distributional tests               & $+0.36$ & Yes & Suggestive   \\
-NetRel       & Weak IC; distributional tests               & $-0.01$ & Yes & Suggestive   \\
-MispricingM  & Composite of RMOM1w, RMOM2w, SMBC, NetRel   & n/a     & Yes & Suggestive   \\
 \end{longtable}
 \end{center}
 \smallskip
-{\small Table\,3.\;Factor evidence summary and grades.}
+{\small \textsuperscript{*}Behavioral factor priced jointly with $K_{\text{hidden}}=2$ hidden factors in the behavioral pricing run. Base factors use the full-sample GX-full pricing run.}
 
-\subsection{Behavioral Factor Search}
-
-The five priced-risk tilt factors (CRASH8, BETA26, TVLC, SKEW52, NEWC) emerge from a structured search for factors driven by investor behavior rather than standard risk characteristics. The search tested 182 candidate long-short specifications (91 price-based features $\times$ 2 directions), each constructed from trailing windows of returns, volatility, skewness, drawdowns, beta, and asset age.
-
-Each candidate was added one-by-one to the full factor zoo and priced through the Giglio-Xiu hidden-factor engine. The discovery bar was deliberately hard: candidates had to achieve $|t| \geq 2.0$ on the GX-full pricing test while competing against 19 existing factors plus 2 hidden latent factors. Of the 182 candidates, 102 passed this uncorrected bar---a 56\% hit rate that is correctly interpreted as exploratory mining (under the null, ${\sim}5\%$ would pass by chance). The final shortlist was therefore held to a much harsher standard:
+\subsection{How to Read the Grades}
 
 \begin{center}
-\begin{tabular}{lrrrl}
+\small
+\begin{tabularx}{\textwidth}{L{0.25\textwidth}X}
 \toprule
 \rowcolor{tablehead}
-\textbf{Factor} & \textbf{GX\;$t$} & \textbf{Raw\;$p$} & \textbf{BH\;$q$-value} & \textbf{Bonferroni} \\
+\textbf{Grade} & \textbf{Meaning} \\
 \midrule
-CRASH8 & $+4.79$ & $4.56 \times 10^{-5}$ & $2.07 \times 10^{-4}$ & Pass ($|t| > 3.64$) \\
-BETA26 & $+4.60$ & $8.51 \times 10^{-5}$ & $3.48 \times 10^{-4}$ & Pass \\
-SKEW52 & $+3.44$ & $3.19 \times 10^{-6}$ & $2.07 \times 10^{-5}$ & Pass \\
-NEWC   & $+3.43$ & $2.74 \times 10^{-5}$ & $1.39 \times 10^{-4}$ & Pass \\
+Confirmed & Strong on multiple independent lenses; defensible core signal. \\
+Behavioral-confirmed & New behavioral factor that is strongly GX-priced and survives Bonferroni multiple-testing correction. \\
+Priced risk & Compensated systematic exposure, but not necessarily a week-to-week trading edge. \\
+Suggestive & Economic story remains intact with partial or semi-significant evidence. \\
+Economic-only & Sound rationale, but this data cannot confirm it. \\
+Structure & Risk direction describing how the market moves, not an alpha bet. \\
+Not supported & Fails its own prediction on this sample. \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{center}
-\smallskip
-{\small Table\,4.\;Behavioral factor search survivors. All four factors survive both Benjamini-Hochberg FDR ($q < 0.001$) and Bonferroni family-wise error correction across 182 tests.}
 
-However, re-pricing each factor separately on the frozen in-sample (2021--2024) and out-of-sample (2024--2026) windows reveals that their standalone single-window premia are weak---IS $t$-statistics range from $-1.18$ to $+0.68$, and OOS $t$-statistics from $-0.57$ to $+1.24$. This is precisely why these factors are used only as a small capped sleeve in the final strategy, never as core alpha: they describe real priced risks on the full panel but are not reliable enough in any single sub-window to bear large allocations.
+The grading is deliberately not pass/fail. A 264-week crypto panel cannot hit $|t|\geq2$ everywhere, and a factor can be real on one lens while silent on another. VolC and MAXRET show the key nuance. Their weekly ranking evidence is strong: low-vol wins week to week, and lottery spikes reverse. But their long-run priced-premium evidence can point in the opposite direction from what a pure alpha-signal interpretation would suggest. The short-term ranking edge and the multi-year risk premium are not the same trade. That is why the strategy routes factors to different jobs instead of mechanically trading one master score.
 
-\begin{keyfinding}[title=Important]
-MispricingM dominance is not a full-sample artifact. The composite is selected from factors that almost-stochastically dominate Bitcoin on the full sample, but re-running the ASSD test split by window shows MispricingM dominates BTC ($\varepsilon_2 = 0.000$) in the in-sample window, the full sample, \emph{and} the out-of-sample window. Two of its four components (RMOM1w, SMBC) dominate in all three windows; NetRel and RMOM2w each carry a single-window flag, but the diversified composite is stable across the split.
-\end{keyfinding}
+\subsection{Factor Validation: Selected Exhibits}
 
-% ══════════════════════════════════════════════════════════════════════
-\section{Economic Intuition and Factor Evidence}
-% ══════════════════════════════════════════════════════════════════════
-
-\subsection{Core Weekly Rankers}
-
-\textbf{VolC} is the low-volatility factor. It ranks coins by recent realized volatility and favors calmer assets. This is related to the low-volatility anomaly in equities, where investors may overpay for exciting high-risk assets and underpay for less volatile ones.\footnote{The low-volatility interpretation is related to Frazzini and Pedersen (2014), who argue that leverage constraints can make safer assets earn better risk-adjusted returns than standard theory predicts.}
-
-\textbf{MAXRET} is a lottery-reversal factor. It identifies coins with a very large recent weekly return and expects some of that excitement to reverse the following week. The intuition comes from lottery-demand and investor-attention research: assets with extreme recent payoffs can become overpriced when investors chase them.\footnote{Bali, Cakici, and Whitelaw (2011) study lottery-like payoffs in equities. Han et al.\,(2024) extend related factor ideas to cryptocurrency portfolios.}
+The three charts below illustrate cumulative long-short returns and rolling IC significance for three representative factors spanning different roles in the strategy: VolC (confirmed weekly ranker), CRASH8 (behavioral priced-risk factor), and NetRel (structure/ASD route).
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.85\textwidth]{figures/image3.png}
-\caption{VolC remains statistically meaningful out-of-sample. The negative information coefficient is expected because the strategy favors the low-volatility side of the ranking.}
+\begin{minipage}[t]{0.485\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{figures/volc_01_cumulative_return.png}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.485\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{figures/volc_02_rolling_ic_significance.png}
+\end{minipage}
+\caption{VolC (low-volatility anomaly). Left: cumulative long-short return with IS/OOS split. Right: rolling Newey-West IC $t$-statistic; values outside the $\pm1.65$ band indicate significant weekly ranking power.}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.85\textwidth]{figures/image1.png}
-\caption{MAXRET has robust weekly ranking evidence. The factor is best understood as a short-term reversal signal rather than a simple momentum signal.}
+\begin{minipage}[t]{0.485\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{figures/crash8_01_cumulative_return.png}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.485\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{figures/crash8_02_rolling_return_significance.png}
+\end{minipage}
+\caption{CRASH8 (capitulation rebound). Left: cumulative long-short return. Right: rolling return significance. CRASH8 is priced by the GX test ($t=+4.79$) rather than a consistent IC signal, so significance is episodic and concentrated around drawdown events.}
 \end{figure}
-
-\subsection{Mispricing Composite}
-
-MispricingM averages four signals: RMOM1w, RMOM2w, SMBC, and NetRel. RMOM denotes risk-adjusted momentum. SMBC denotes small-minus-big crypto, a size signal adapted from the classic equity size factor.\footnote{Fama and French (1993) introduce size and value factors in equities. In this project, SMBC adapts the size idea to crypto by comparing smaller and larger crypto assets.} NetRel compares a coin to related coins in its network or cluster.
-
-The composite idea rests on a simple principle: individually noisy signals can become more reliable when averaged, provided they do not all make the same error. Stambaugh and Yuan (2017) demonstrate this for equity mispricing factors, and Han et al.\,(2024) apply closely related mispricing logic to crypto factor portfolios.\footnote{Stambaugh and Yuan (2017) build a mispricing composite in equities. Han et al.\,(2024) show that a crypto mispricing factor based on size and risk-adjusted momentum improves cryptocurrency asset-pricing performance.}
-
-\begin{center}
-\begin{tabular}{lrrrr}
-\toprule
-\rowcolor{tablehead}
-\textbf{Window} & \textbf{Annual return} & \textbf{Sharpe} & \textbf{Return\;$t$} & \textbf{ASD\;$\varepsilon_2$} \\
-\midrule
-In-sample      & $+31.0\%$  & $+1.23$ & $+2.31$ & 0.000 \\
-Out-of-sample  & $+34.1\%$  & $+1.50$ & $+1.60$ & n/a   \\
-\bottomrule
-\end{tabular}
-\end{center}
-\smallskip
-{\small Table\,5.\;MispricingM performance by window.}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.85\textwidth]{figures/image7.png}
-\caption{MispricingM is the strongest composite signal. It becomes the largest sub-book in the final strategy.}
+\begin{minipage}[t]{0.485\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{figures/netrel_01_cumulative_return.png}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.485\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{figures/netrel_02_rolling_ic_significance.png}
+\end{minipage}
+\caption{NetRel (cross-cluster narrative rotation). Left: cumulative long-short return. Right: rolling IC significance. NetRel's IC is individually weak ($t=-0.10$ OOS) but its return distribution almost-stochastically dominates Bitcoin, justifying its role in the MispricingM composite rather than as a standalone ranker.}
 \end{figure}
-
-\subsection{Priced-Risk Tilts}
-
-The Priced-Risk Tilt sleeve (CRASH8, BETA26, TVLC, SKEW52, NEWC) merits transparent failure diagnosis. Out-of-sample, this sub-book produces Sharpe $-0.43$ with annualized return $-13.7\%$---worse than holding Bitcoin. The ablation confirms this is not merely weakness but \emph{active value destruction}: removing the sleeve entirely raises the ensemble's OOS Sharpe from $+0.84$ to $+0.90$.
-
-The failure has a clear economic interpretation. These factors were discovered via a 182-candidate behavioral search and selected based on full-sample GX pricing $t$-statistics. While all four survive Bonferroni correction, their standalone single-window premia are weak (IS $t$-stats of $-1.18$ to $+0.68$; OOS $t$-stats of $-0.57$ to $+1.24$). The full-sample significance likely reflects a specific in-sample regime (the 2022--2023 deleveraging) where crash-rebound and high-beta factors were temporarily rewarded. When that regime ended, the factors became a drag. A production strategy should set the Priced Tilt allocation to zero unless live out-of-sample evidence rehabilitates these signals.
 
 % ══════════════════════════════════════════════════════════════════════
 \section{Final Strategy Construction}
 % ══════════════════════════════════════════════════════════════════════
 
-The final strategy separates factor roles into three books:
+The key design choice in the final strategy construction is \emph{not} to blend every good-looking factor into one composite score. A single score is tempting because it is simple, but it erases the main lesson from Section\,5: factors are real in different ways. Some are weekly rankers, some are distributional mispricing edges, and some are priced systematic exposures. The final strategy therefore builds three separate sub-books, where each book groups factors that came out of the same exit of the factor router.
+
+\subsection{From Router to Books}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/factor_routing_graph.png}
+\caption{Factor routing graph used to construct the three strategy books. The IC route becomes Core Rank, the ASD route becomes MispricingM, and the GX route becomes Priced Tilt. This preserves the kind of evidence each factor has instead of forcing all factors into one master score.}
+\end{figure}
 
 \begin{center}
-\begin{tabular}{lll}
+\small
+\begin{tabularx}{\textwidth}{L{0.15\textwidth}L{0.30\textwidth}L{0.25\textwidth}X}
 \toprule
 \rowcolor{tablehead}
-\textbf{Book} & \textbf{Inputs} & \textbf{Role in portfolio} \\
+\textbf{Sub-book} & \textbf{Members and weights} & \textbf{What unifies them} & \textbf{When it works} \\
 \midrule
-MispricingM  & RMOM1w, RMOM2w, SMBC, NetRel         & Main alpha source \\
-Core Rank    & VolC, MAXRET                          & Statistically strongest weekly rankers \\
-Priced Tilt  & CRASH8, BETA26, TVLC, SKEW52, NEWC   & Small capped risk-premia sleeve \\
+core\_rank & VolC 0.55; MAXRET 0.45 & Confirmed IC-robust weekly rankers. & Defensive sleeve for risk-off markets; low-volatility and lottery-fade act like flight-to-safety trades. \\
+mispricing & RMOM1w, RMOM2w, SMBC, NetRel; 0.25 each & ASSD-dominant distribution edges; the MispricingM composite. & Workhorse alpha sleeve for normal markets; trimmed modestly in risk-off regimes. \\
+priced\_tilt & TVLC 0.25; CRASH8 0.20; BETA26 0.20; SKEW52 0.20; NEWC 0.15 & Priced behavioral and DeFi systematic exposures. & Offensive sleeve for risk-on markets; capped because it is newest and most data-mined. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+\smallskip
+{\small Strategy sub-books and their economic roles.}
+
+There are three reasons to keep these books separate rather than combine them into one signal.
+
+\begin{enumerate}[nosep]
+  \item \textbf{Factors of the same kind share a regime.} Weekly rankers work best when the market is defensive; priced and behavioral tilts are naturally more offensive. A monolithic score cannot lean toward the sleeve that matches the current market state.
+  \item \textbf{Within-book averaging diversifies common noise.} The four mispricing sleeves are individually only Suggestive, but they share a common mispricing signal; averaging keeps the common signal and cancels idiosyncratic noise.\ieeecitetwo{stambaugh-yuan-2017}{han-2024} The behavioral sleeve is also designed to avoid putting all weight on one correlated effect.
+  \item \textbf{Different books need different risk budgets.} A defensive ranker book can carry more gross exposure in a downturn; an offensive tilt book should be cut hard in the same environment. Separate books let each sleeve carry its own regime-dependent gross exposure.
+\end{enumerate}
+
+\subsection{Why MispricingM Becomes a Book}
+
+The mispricing book is exactly the MispricingM composite developed in Section\,5: SMBC, NetRel, RMOM1w, and RMOM2w at equal weights. Individually, these factors are not clean weekly rankers. Together, they form the equal-weight blend that almost-stochastically dominates Bitcoin. The final strategy construction simply promotes that research prototype into a live sub-book.
+
+\begin{center}
+\small
+\begin{tabular}{lccc}
+\toprule
+\rowcolor{tablehead}
+\textbf{Window} & \textbf{Ann.\ return} & \textbf{Sharpe} & \textbf{$t$-stat} \\
+\midrule
+IS  & $+31.0\%$ & $+1.23$ & $+2.31$ \\
+OOS & $+34.1\%$ & $+1.50$ & $+1.60$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 \smallskip
-{\small Table\,6.\;Strategy sub-books and their roles.}
+{\small MispricingM performance by window.}
 
-The allocator is \emph{causal}, meaning it does not use future returns when setting current weights. Each week, it looks back at prior sub-book returns, estimates which book has recently been useful, blends that estimate with a conservative base allocation, and then applies regime sizing.
+This is why NetRel reappears in the final strategy. It is not being smuggled back in after failing as a weekly ranker. It was routed here by the ASD lens in Section\,5, and this book is the trading home of that route.
 
-Regime sizing uses XGBoost probabilities for RiskOff, Neutral, and RiskOn states.\footnote{Chen and Guestrin (2016) introduce XGBoost, a regularized gradient-boosted tree system. Here it is used only to estimate market-state probabilities.} The model is used for risk sizing, not as a fully independent return predictor. This is an important constraint because complex machine-learning models can easily overfit in short crypto histories.
+The honesty flag is kept visible: factor selection for the mispricing book uses full-sample ASD, which technically sees the OOS window. To make that transparent, the validation pipeline re-reports $\varepsilon_2$ separately for IS, full sample, and OOS. The dominance is not only an OOS artifact, but the selection process is still not a perfectly untouched holdout.
+
+\subsection{Why Priced Tilt Is Low-Correlation}
+
+The priced\_tilt book is deliberately not one behavioral trade repeated under four names. The behavioral factors are chosen to be economically distinct and mostly low-correlation:
 
 \begin{center}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\rowcolor{tablehead}
+ & \textbf{NEWC} & \textbf{SKEW52} & \textbf{CRASH8} & \textbf{BETA26} \\
+\midrule
+NEWC   & $+1.00$ & $+0.03$ & $+0.63$ & $+0.10$ \\
+SKEW52 & $+0.03$ & $+1.00$ & $+0.20$ & $+0.09$ \\
+CRASH8 & $+0.63$ & $+0.20$ & $+1.00$ & $+0.17$ \\
+BETA26 & $+0.10$ & $+0.09$ & $+0.17$ & $+1.00$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\smallskip
+{\small Behavioral factor correlation matrix.}
+
+Most pairs are close to zero. The one meaningful correlation, NEWC with CRASH8 at $+0.63$, is economically sensible because younger coins are more crash-prone. Both still survive jointly in the GX model, so the pair is not simply one trade wearing two labels. TVLC rides alongside these behavioral factors as the priced DeFi-engagement premium.
+
+\subsection{Causal Allocation Across Books}
+
+The book weights are adjusted dynamically each week. Each week, the allocation is set by a causal rule that uses only information available before that week:
+
+\begin{enumerate}[nosep]
+  \item \textbf{Start from a base allocation.} The Balanced variant starts at mispricing 55\%, core\_rank 35\%, and priced\_tilt 10\%. The Sharpe variant leans harder on the workhorse book, while the Defensive variant drops the offensive sleeve entirely.
+  \item \textbf{Re-weight toward what has been working.} For each book, look back 26 weeks and score realized usefulness as $\max(\text{Sharpe},0)\times(1+\text{drawdown})$. A book that earns returns without drawing down receives more weight; a book that bleeds receives less.
+  \item \textbf{Tilt by regime.} An XGBoost regime model outputs Risk-On, Neutral, and Risk-Off probabilities.\ieeecite{chen-guestrin-2016} Mispricing is nudged up in risk-on markets, core\_rank is nudged up in risk-off markets, and priced\_tilt is increased only when the regime supports risk-taking.
+  \item \textbf{Cap the offensive sleeve.} priced\_tilt is hard-capped at 18\% of book allocation. It comes from a 182-candidate behavioral search, so it is never allowed to dominate the portfolio just because its recent run looks hot.
+\end{enumerate}
+
+\begin{center}
+\small
+\begin{tabular}{lccc}
+\toprule
+\rowcolor{tablehead}
+\textbf{Variant} & \textbf{Mispricing} & \textbf{core\_rank} & \textbf{priced\_tilt} \\
+\midrule
+Sharpe & $92\%$ & $8\%$ & $0\%$ \\
+Balanced & $55\%$ & $35\%$ & $10\%$ \\
+Defensive & $65\%$ & $35\%$ & $0\%$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\smallskip
+{\small Base allocations before rolling-performance and regime adjustments.}
+
+\subsection{Regime Filtering and Final Weights}
+
+The regime filter is a sizing layer, not a separate alpha model. Its job is to decide how much capital each book should receive after the base allocation and rolling-performance score have already been computed. This keeps the use of machine learning narrow: XGBoost estimates whether the market looks Risk-On, Neutral, or Risk-Off, and the allocator uses those probabilities to nudge book weights rather than to forecast individual coin returns.\ieeecite{chen-guestrin-2016}
+
+This distinction matters because the available crypto return history is short and complex models overfit easily. The regime filter is therefore deliberately conservative. In Risk-Off states, core\_rank receives more weight because low-volatility and lottery-fade trades are defensive. In Risk-On states, mispricing can receive more weight and priced\_tilt is allowed to participate, subject to its hard cap. In Neutral states, the allocator stays closer to the blended base allocation.
+
+\begin{center}
+\small
 \begin{tabular}{lccc}
 \toprule
 \rowcolor{tablehead}
@@ -493,7 +667,9 @@ Defensive Ensemble & 60.4\% & 35.7\% & 3.9\% \\
 \end{tabular}
 \end{center}
 \smallskip
-{\small Table\,7.\;Ensemble variant allocations.}
+{\small Realized average ensemble allocations after rolling-performance scoring, regime filtering, and caps.}
+
+The realized weights show the constraint in action. Even the Sharpe Ensemble, which starts from a highly concentrated mispricing prior, still leaves a small allocation to Core Rank and keeps Priced Tilt below 4\%. Balanced Ensemble gives more capital to Core Rank and permits a larger but still capped Priced Tilt sleeve.
 
 \begin{figure}[H]
 \centering
@@ -534,8 +710,6 @@ BTC & $+0.92$ & $+54.4\%$ & $59.0\%$ & $-75.2\%$ & 52\% & 373 \\
 \smallskip
 {\small Table\,8.\;Full-window performance (in-sample\;+\;out-of-sample). SE\;=\;Sharpe Ensemble, BE\;=\;Balanced Ensemble, DE\;=\;Defensive Ensemble, MM\;=\;MispricingM, CR\;=\;Core Rank, PT\;=\;Priced Tilt, EW\;=\;Equal-Weight Market, BTC\;=\;Bitcoin.}
 
-In-sample, the crypto market was strong, making the out-of-sample period more important for judging robustness:
-
 \begin{center}
 \small
 \begin{tabular}{lcccccl}
@@ -553,6 +727,8 @@ BTC & $+1.14$ & $+72.1\%$ & $63.2\%$ & $-75.2\%$ & 54\% & 295 \\
 \end{center}
 \smallskip
 {\small Table\,9.\;In-sample performance.}
+
+In-sample, the crypto market was strong, making the out-of-sample period more important for judging robustness:
 
 Out-of-sample, Bitcoin and the equal-weight market both lose money, while all three ensembles remain positive with materially smaller drawdowns:
 
@@ -590,7 +766,7 @@ The results support three conclusions. First, the Sharpe Ensemble has the best r
 The headline OOS Sharpe of $+0.84$ for the Sharpe Ensemble warrants transparent decomposition rather than uncritical celebration. Three forces shape this number, and understanding each is essential for evaluating forward-looking capacity.
 
 \begin{callout}[title=Alpha source concentration]
-The ablation table reveals that MispricingM alone achieves OOS Sharpe $+0.85$---statistically indistinguishable from the full ensemble's $+0.84$. The ensemble's diversification across three books does not add return; it reduces volatility ($44.1\%$ for MispricingM alone vs.\ $35.8\%$ for SE) and drawdown ($-29.9\%$ vs.\ $-24.7\%$). The Priced Tilt contribution is negative (OOS Sharpe $-0.43$), meaning the ensemble's Sharpe would be higher ($+0.90$) without it. The practical implication: the strategy is a single-factor portfolio with a volatility hedge, not a genuinely diversified multi-factor book.
+Table\,10 shows that MispricingM alone achieves OOS Sharpe $+0.85$---statistically indistinguishable from the full ensemble's $+0.84$. The ensemble's diversification across three books does not add return; it reduces volatility ($44.1\%$ for MispricingM alone vs.\ $35.8\%$ for SE) and drawdown ($-29.9\%$ vs.\ $-24.7\%$). The Priced Tilt contribution is negative (OOS Sharpe $-0.43$), meaning the ensemble's Sharpe would be higher ($+0.90$) without it. The practical implication: the strategy is a single-factor portfolio with a volatility hedge, not a genuinely diversified multi-factor book.
 \end{callout}
 
 \textbf{IS-to-OOS decay.}\;
@@ -607,14 +783,14 @@ Sharpe Ensemble              & $+1.36$ & $+0.84$ & $-38\%$ \\
 Defensive Ensemble            & $+1.31$ & $+0.75$ & $-43\%$ \\
 Balanced Ensemble             & $+1.28$ & $+0.68$ & $-47\%$ \\
 Bitcoin benchmark             & $+1.14$ & $-0.33$ & $-129\%$ \\
-Neural-net optimizer (Stage 14) & $+2.06$ & $-0.46$ & $-122\%$ \\
+Neural-net optimizer (Appendix B) & $+2.06$ & $-0.46$ & $-122\%$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 \smallskip
 {\small Table\,11.\;IS-to-OOS Sharpe decay comparison.}
 
-A 38\% decay is meaningful overfitting but substantially better than the ML-heavy variants (122\% decay for the neural-net optimizer) and the benchmark itself (Bitcoin's Sharpe turns deeply negative). The decay pattern is consistent with a genuine but noisy signal that loses some IS-optimized edge rather than a fully data-mined artifact.
+A 38\% decay is meaningful overfitting but substantially better than the ML-heavy variants (122\% decay for the neural-net optimizer) and the benchmark itself (Bitcoin's Sharpe turns deeply negative). The decay pattern is consistent with a genuine but noisy signal that loses some IS-optimized edge rather than a spurious in-sample pattern.
 
 \textbf{Execution cost sensitivity.}\;
 The backtest assumes 10\;bps one-way transaction costs. The audit estimates realistic execution costs of 20--50\;bps round-trip for the long-short portfolio, particularly for smaller constituents:
@@ -642,38 +818,6 @@ The long-short construction partially neutralizes crypto market beta, but imperf
 \textbf{Hit rate analysis.}\;
 The OOS weekly hit rate of 51\% is barely above chance. This is not a deficiency---it is characteristic of strategies where alpha comes from return magnitude rather than frequency. The MispricingM composite generates occasional large positive returns (IS skewness $+1.87$, OOS skewness $+0.62$) that compensate for frequent small losses. This positive-skew profile is economically consistent with the reversal and crash-rebound mechanisms underlying the composite.
 
-\subsection{Ablation and Sensitivity Analysis}
-
-To test how much the headline depends on the two hardcoded-prior knobs---the priced-tilt cap and the regime tilt---each is isolated against the Sharpe Ensemble base allocation:
-
-\begin{center}
-\small
-\begin{tabular}{lccl}
-\toprule
-\rowcolor{tablehead}
-\textbf{Variant} & \textbf{OOS Sharpe} & \textbf{OOS Ann.\ return} & \textbf{Note} \\
-\midrule
-Sharpe Ensemble (headline) & $+0.84$ & $+29.9\%$ & Three-book ensemble as presented \\
-SE Priced-Tilt Off          & $+0.90$ & $+34.2\%$ & Priced-risk sleeve removed entirely \\
-SE Priced-Tilt 5\% cap     & $+0.87$ & $+31.8\%$ & Sleeve cap cut from 18\% to 5\% \\
-SE No Regime Tilt           & $+0.80$ & $+27.9\%$ & Regime multipliers all set to 1.0 \\
-MispricingM Only            & $+0.85$ & $+37.2\%$ & MispricingM book traded alone \\
-\bottomrule
-\end{tabular}
-\end{center}
-\smallskip
-{\small Table\,13.\;Ablation results.}
-
-Three honest findings emerge:
-
-\begin{enumerate}[nosep]
-  \item \textbf{The Priced Tilt sleeve is a net drag out-of-sample}: removing it \emph{raises} OOS Sharpe from $+0.84$ to $+0.90$. The audit's recommendation to cut rather than merely cap it is supported by the data, and a production version should run priced-risk factors at a near-zero allocation.
-  \item \textbf{Regime conditioning adds a small, measured benefit} ($+0.84$ vs.\ $+0.80$ with no tilt)---real but modest, and not the source of the strategy's edge.
-  \item \textbf{The ensemble is essentially a single-factor strategy}: MispricingM alone earns OOS Sharpe $+0.85$, statistically indistinguishable from the full ensemble, so diversification across books mainly controls volatility and drawdown rather than adding return.
-\end{enumerate}
-
-Across the full regime-tilt $\times$ priced-cap grid, the OOS Sharpe stays in a tight $+0.80$ to $+0.91$ band, so the headline is robust to these priors even though the priors are not individually optimal.
-
 % ══════════════════════════════════════════════════════════════════════
 \section{Critical Evaluation}
 % ══════════════════════════════════════════════════════════════════════
@@ -682,7 +826,7 @@ Across the full regime-tilt $\times$ priced-cap grid, the OOS Sharpe stays in a 
 The strongest weakness is sample length. The final out-of-sample test has only 79\;weeks. That is useful, but it is not enough to prove the strategy will work across every future crypto cycle.
 
 \textbf{Selection risk.}\;
-The final strategy was designed after earlier experiments showed what did not work. That is a normal research process, but it means the result should not be described as a pure untouched holdout. Two specific selection concerns have been addressed directly: the behavioral factor search is reported with Bonferroni and Benjamini-Hochberg multiple-testing corrections (all four selected factors survive both), and the factors plus the MispricingM composite are re-tested with explicit in-sample/out-of-sample splits rather than full-sample evidence alone. The single-factor dependency on MispricingM is real and is quantified in the ablation table rather than hidden.
+The final strategy was designed after earlier experiments showed what did not work. That is a normal research process, but it means the result should not be described as a pure untouched holdout. Two specific selection concerns have been addressed directly: the behavioral factor search is reported with Bonferroni and Benjamini-Hochberg multiple-testing corrections (all four selected factors survive both), and the factors plus the MispricingM composite are re-tested with explicit in-sample/out-of-sample splits rather than full-sample evidence alone. The single-factor dependency on MispricingM is real and is quantified in Table\,10 rather than hidden.
 
 \textbf{Regime model.}\;
 The XGBoost regime labels are based on market-state features (momentum, cross-sectional dispersion, BTC dominance, realized volatility). They are useful for sizing risk, but they are not ground truth.
@@ -753,100 +897,66 @@ Neural network optimizer  & $-0.46$ & $-19.1\%$ & $41.0\%$ & $-45.5\%$ & 79 \\
 \end{tabular}
 \end{center}
 \smallskip
-{\small Table\,B1.\;Stage\,14 XGBoost optimizer variants (OOS).}
+{\small Table\,B1.\;XGBoost optimizer variants (OOS).}
 
 The lesson is that more model complexity did not improve out-of-sample robustness. The final strategy therefore constrains model freedom, separates factor roles, caps priced-risk exposure, and uses machine learning only for risk sizing.
 
-To be explicit about where the gain comes from: Stage\,14's best variant reaches OOS Sharpe $+0.61$, while Stage\,15's Sharpe Ensemble reaches $+0.84$. That improvement is the result of \emph{simplification}---dropping the multi-sleeve optimizer complexity and concentrating on the MispricingM composite---not of discovering additional signal. The IS$\to$OOS Sharpe decay is also informative: the Sharpe Ensemble decays $1.36 \to 0.84$ (${\approx}38\%$), the Defensive Ensemble $1.31 \to 0.75$ (${\approx}43\%$), and the Balanced Ensemble $1.28 \to 0.68$ (${\approx}47\%$), whereas Bitcoin goes from $+1.14$ in-sample to $-0.33$ out-of-sample. A ${\sim}38\%$ decay is meaningful overfitting but is smaller than the decay typical of complex ML variants here (the neural-network optimizer decayed from $+2.06$ to $-0.46$).
+To be explicit about where the gain comes from: the best Appendix\,B variant reaches OOS Sharpe $+0.61$, while the final Sharpe Ensemble reaches $+0.84$. That improvement is the result of \emph{simplification}---dropping the multi-sleeve optimizer complexity and concentrating on the MispricingM composite---not of discovering additional signal. The IS$\to$OOS Sharpe decay is also informative: the Sharpe Ensemble decays $1.36 \to 0.84$ (${\approx}38\%$), the Defensive Ensemble $1.31 \to 0.75$ (${\approx}43\%$), and the Balanced Ensemble $1.28 \to 0.68$ (${\approx}47\%$), whereas Bitcoin goes from $+1.14$ in-sample to $-0.33$ out-of-sample. A ${\sim}38\%$ decay is meaningful overfitting but is smaller than the decay typical of complex ML variants here (the neural-network optimizer decayed from $+2.06$ to $-0.46$).
 
 % ══════════════════════════════════════════════════════════════════════
-\section{Appendix C: Reproducibility Note}
-% ══════════════════════════════════════════════════════════════════════
-
-This document is written so that the reader can evaluate the strategy without access to code. The tables and figures are included directly in the report. If the competition submission includes a code package, that package can be used to reproduce the numbers, but the report does not require readers to inspect the code to understand the method.
-
-% ══════════════════════════════════════════════════════════════════════
-\section{Appendix D: Audit Remediation Summary}
-% ══════════════════════════════════════════════════════════════════════
-
-An independent audit (AUDIT\_AND\_FINDINGS\_REPORT.md) raised thirteen findings. Those touching the production pipeline (Stages 09, 10, 12, 15) have been resolved as follows; the resolutions are reflected in the relevant stage RESULTS.md files and in the sections above.
-
-\small
-\begin{longtable}{cL{4.5cm}L{8cm}}
-\toprule
-\rowcolor{tablehead}
-\textbf{\#} & \textbf{Finding} & \textbf{Resolution} \\
-\midrule
-\endfirsthead
-\toprule
-\rowcolor{tablehead}
-\textbf{\#} & \textbf{Finding} & \textbf{Resolution} \\
-\midrule
-\endhead
-\bottomrule
-\endlastfoot
-1 & Uncontrolled multiple testing in the 182-candidate behavioral search & Bonferroni + Benjamini-Hochberg corrections added; all four selected factors survive both \\
-2 & No IS/OOS holdout for behavioral factor discovery & Each shortlist factor re-priced on the frozen IS window and the held-out OOS window; standalone single-window premia shown to be weak, justifying the capped-sleeve treatment \\
-3 & Supply backfill look-ahead / clip bug & Per-day log-supply drift clamp fixed to a realistic annual band ($-3\%$/yr to $+50\%$/yr), removing the unintended ${\sim}1500\%$/yr upper bound \\
-4 & ASD computed on full sample only & ASSD test now also computed for the IS and OOS windows; MispricingM dominates BTC in all three windows \\
-5 & Hardcoded activation/regime-tilt priors unvalidated & Priors documented with economic rationale; a ``No Regime Tilt'' baseline and a full regime-tilt $\times$ priced-cap sensitivity grid added (OOS Sharpe stays in $+0.80$--$0.91$) \\
-6 & Priced Tilt sub-book toxic OOS & Ablation added: removing the sleeve raises OOS Sharpe $+0.84 \to +0.90$, supporting a near-zero allocation in production \\
-8 & FMB shortcut in \texttt{09\_gx\_pricing.py} & Deprecation banner + runtime warning added; all reported GX $t$-stats come from \texttt{09c\_gx\_pricing\_full.py} \\
-9 & \texttt{fillna(mean)} mild look-ahead & Replaced with leakage-free forward-fill (mean only for unavoidable leading gaps) in the GX engine \\
-11 & Stage 14 $\to$ 15 improvement framing & Clarified in Appendix B: the $+0.61 \to +0.84$ OOS gain comes from simplification, not new signal \\
-12 & Undocumented Stage 10 $\to$ 12 $\to$ 15 selection path & Documented in the root pipeline README.md and the provenance note in the data section \\
-13 & Misleading winsorization comment & Comment corrected: returns are intentionally raw because VolC/MAXRET target the tails and downstream tests are rank-based \\
-\end{longtable}
-
-\normalsize
-\smallskip
-Findings 7 and 10 concern Stages 13--14 (the regime experiments in the appendices) and do not affect the production pipeline; they are noted but not core to this submission.
-
-% ══════════════════════════════════════════════════════════════════════
-\section*{Bibliography}
-\addcontentsline{toc}{section}{Bibliography}
+\section*{References}
+\addcontentsline{toc}{section}{References}
 % ══════════════════════════════════════════════════════════════════════
 
 \begin{flushleft}
 \small
+\begin{enumerate}[label={[\arabic*]},leftmargin=1.6em,itemsep=4pt]
 
-Bali, T.\,G., Cakici, N., and Whitelaw, R.\,F. (2011). Maxing out: Stocks as lotteries and the cross-section of expected returns. \textit{Journal of Financial Economics}, 99(2), 427--446.
+\item \label{ref:bali-2011} Bali, T.\,G., Cakici, N., and Whitelaw, R.\,F. (2011). Maxing out: Stocks as lotteries and the cross-section of expected returns. \textit{Journal of Financial Economics}, 99(2), 427--446.
 
-Brigida, M. (2025). The surprising irrelevance of total-value-locked on cryptocurrency returns. \textit{Economics Letters}, 257, 112673.
+\item \label{ref:brigida-2025} Brigida, M. (2025). The surprising irrelevance of total-value-locked on cryptocurrency returns. \textit{Economics Letters}, 257, 112673.
 
-Brigida, M. (2026). \textit{Crypto Pricing with Hidden Factors}. arXiv:2601.07664.
+\item \label{ref:brigida-2026} Brigida, M. (2026). \textit{Crypto Pricing with Hidden Factors}. arXiv:2601.07664.
 
-Carhart, M.\,M. (1997). On persistence in mutual fund performance. \textit{Journal of Finance}, 52(1), 57--82.
+\item \label{ref:carhart-1997} Carhart, M.\,M. (1997). On persistence in mutual fund performance. \textit{Journal of Finance}, 52(1), 57--82.
 
-Chen, T., and Guestrin, C. (2016). XGBoost: A scalable tree boosting system. \textit{Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining}, 785--794.
+\item \label{ref:chen-guestrin-2016} Chen, T., and Guestrin, C. (2016). XGBoost: A scalable tree boosting system. \textit{Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining}, 785--794.
 
-DeMiguel, V., Garlappi, L., and Uppal, R. (2009). Optimal versus naive diversification: How inefficient is the 1/N portfolio strategy? \textit{Review of Financial Studies}, 22(5), 1915--1953.
+\item \label{ref:demiguel-2009} DeMiguel, V., Garlappi, L., and Uppal, R. (2009). Optimal versus naive diversification: How inefficient is the 1/N portfolio strategy? \textit{Review of Financial Studies}, 22(5), 1915--1953.
 
-Fama, E.\,F., and French, K.\,R. (1993). Common risk factors in the returns on stocks and bonds. \textit{Journal of Financial Economics}, 33(1), 3--56.
+\item \label{ref:fama-french-1993} Fama, E.\,F., and French, K.\,R. (1993). Common risk factors in the returns on stocks and bonds. \textit{Journal of Financial Economics}, 33(1), 3--56.
 
-Frazzini, A., and Pedersen, L.\,H. (2014). Betting against beta. \textit{Journal of Financial Economics}, 111(1), 1--25.
+\item \label{ref:fama-macbeth-1973} Fama, E.\,F., and MacBeth, J.\,D. (1973). Risk, return, and equilibrium: Empirical tests. \textit{Journal of Political Economy}, 81(3), 607--636.
 
-Giglio, S., and Xiu, D. (2021). Asset pricing with omitted factors. \textit{Journal of Political Economy}, 129(7), 1947--1990.
+\item \label{ref:frazzini-pedersen-2014} Frazzini, A., and Pedersen, L.\,H. (2014). Betting against beta. \textit{Journal of Financial Economics}, 111(1), 1--25.
 
-Grinold, R.\,C., and Kahn, R.\,N. (2000). \textit{Active Portfolio Management}. McGraw-Hill.
+\item \label{ref:giglio-xiu-2021} Giglio, S., and Xiu, D. (2021). Asset pricing with omitted factors. \textit{Journal of Political Economy}, 129(7), 1947--1990.
 
-Guo, L., H\"ardle, W.\,K., and Tao, Y. (2024). A time-varying network for cryptocurrencies. \textit{Journal of Business and Economic Statistics}, 42(2), 437--456.
+\item \label{ref:grinold-kahn-2000} Grinold, R.\,C., and Kahn, R.\,N. (2000). \textit{Active Portfolio Management}. McGraw-Hill.
 
-Han, W., Newton, D., Platanakis, E., Sutcliffe, C., and Ye, X. (2024). On the almost stochastic dominance of cryptocurrency factor portfolios and implications for cryptocurrency asset pricing. \textit{European Financial Management}, 30, 1125--1164.
+\item \label{ref:guo-2024} Guo, L., H\"ardle, W.\,K., and Tao, Y. (2024). A time-varying network for cryptocurrencies. \textit{Journal of Business and Economic Statistics}, 42(2), 437--456.
 
-Leshno, M., and Levy, H. (2002). Preferred by all and preferred by most decision makers: Almost stochastic dominance. \textit{Management Science}, 48(8), 1074--1085.
+\item \label{ref:han-2024} Han, W., Newton, D., Platanakis, E., Sutcliffe, C., and Ye, X. (2024). On the almost stochastic dominance of cryptocurrency factor portfolios and implications for cryptocurrency asset pricing. \textit{European Financial Management}, 30, 1125--1164.
 
-Magdon-Ismail, M., and Atiya, A.\,F. (2004). Maximum drawdown. \textit{Risk Magazine}, 17(10), 99--102.
+\item \label{ref:jegadeesh-titman-1993} Jegadeesh, N., and Titman, S. (1993). Returns to buying winners and selling losers: Implications for stock market efficiency. \textit{Journal of Finance}, 48(1), 65--91.
 
-McLean, R.\,D., and Pontiff, J. (2016). Does academic research destroy stock return predictability? \textit{Journal of Finance}, 71(1), 5--32.
+\item \label{ref:leshno-levy-2002} Leshno, M., and Levy, H. (2002). Preferred by all and preferred by most decision makers: Almost stochastic dominance. \textit{Management Science}, 48(8), 1074--1085.
 
-Newey, W.\,K., and West, K.\,D. (1987). A simple, positive semi-definite, heteroskedasticity and autocorrelation consistent covariance matrix. \textit{Econometrica}, 55(3), 703--708.
+\item \label{ref:liu-tsyvinski-2021} Liu, Y., and Tsyvinski, A. (2021). Risks and returns of cryptocurrency. \textit{Review of Financial Studies}, 34(6), 2689--2727.
 
-Sharpe, W.\,F. (1966). Mutual fund performance. \textit{Journal of Business}, 39(1), 119--138.
+\item \label{ref:magdon-ismail-atiya-2004} Magdon-Ismail, M., and Atiya, A.\,F. (2004). Maximum drawdown. \textit{Risk Magazine}, 17(10), 99--102.
 
-Spearman, C. (1904). The proof and measurement of association between two things. \textit{American Journal of Psychology}, 15(1), 72--101.
+\item \label{ref:mclean-pontiff-2016} McLean, R.\,D., and Pontiff, J. (2016). Does academic research destroy stock return predictability? \textit{Journal of Finance}, 71(1), 5--32.
 
-Stambaugh, R.\,F., and Yuan, Y. (2017). Mispricing factors. \textit{Review of Financial Studies}, 30(4), 1270--1315.
+\item \label{ref:newey-west-1987} Newey, W.\,K., and West, K.\,D. (1987). A simple, positive semi-definite, heteroskedasticity and autocorrelation consistent covariance matrix. \textit{Econometrica}, 55(3), 703--708.
+
+\item \label{ref:sharpe-1966} Sharpe, W.\,F. (1966). Mutual fund performance. \textit{Journal of Business}, 39(1), 119--138.
+
+\item \label{ref:spearman-1904} Spearman, C. (1904). The proof and measurement of association between two things. \textit{American Journal of Psychology}, 15(1), 72--101.
+
+\item \label{ref:stambaugh-yuan-2017} Stambaugh, R.\,F., and Yuan, Y. (2017). Mispricing factors. \textit{Review of Financial Studies}, 30(4), 1270--1315.
+
+\end{enumerate}
 
 \end{flushleft}
 
