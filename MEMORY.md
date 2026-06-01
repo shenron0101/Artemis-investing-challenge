@@ -174,7 +174,8 @@ Key resolved findings:
 
 ## Current work
 
-- [ ] Stage 17: HTML presentation deck (not started)
+- [x] Stage 17: PowerPoint presentation deck — `16_reports/Artemis_Track1_Presentation.pptx` (13 slides, narrative arc: problem→thesis→evidence→result→honesty→close). Built via `17_presentation_slides/build_pptx.py` (python-pptx; conceptual slides are native editable shapes; charts embedded). Light theme matching Stage 12 figures. Companion PDF (LibreOffice-rendered) at `16_reports/Artemis_Track1_Presentation.pdf`. Charts faithful from Stage 15 `metrics.json` via `assets/make_charts.py` (NOT a pipeline rerun — see below). (An earlier reveal.js HTML version was discarded per user preference for native ppt.)
+  - **Figure-regen blocker:** report's cumulative-returns / book-allocation / xgboost-regime PNGs were never committed and a faithful pipeline rerun is blocked in this env (no `~/.hermes/.env` → missing ARTEMIS/FRED keys; Stage 08 `network_panel.parquet` absent, which Stage 14 consumes). Hero slide uses a metrics-based OOS bar comparison + the committed MispricingM dashboard instead of a fabricated equity curve. Re-run pipeline to swap in the true curve if keys/Stage-08 panel return.
 - [x] Stage 16: Reports folder created, all reports moved
 - [x] Stage 15: Final ensemble with ablations — complete
 - [x] Audit: All 13 findings addressed
