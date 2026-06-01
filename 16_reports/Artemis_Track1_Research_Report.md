@@ -1,7 +1,7 @@
 ---
-title: "Separating Alpha, Risk Premia, and Regime Sizing in Crypto Factor Portfolios"
+title: "Crypto Factor Rebalancing Portfolios"
 subtitle: "A systematic weekly crypto rebalancing strategy based on validated factor signals"
-author: "shenron0101"
+author: "Shobhit, Aryan"
 date: "May 31, 2026"
 ---
 
