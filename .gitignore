@@ -74,6 +74,9 @@ reports/*.html
 # Exception: factor visualisation charts are referenced by the RESULTS.md docs
 !12_factor_viz/**/*.png
 
+# Exception: figures embedded in the competition report
+!figures/*.png
+
 # Research PDFs are large local source documents; keep notes/scripts in git.
 02_Research/*.pdf
 
