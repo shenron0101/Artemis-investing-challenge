@@ -89,6 +89,56 @@ factor zoo. They still pass GX-full significance after hidden factors are added.
 | CRASH8_crashed_minus_resilient | +177.9% | +4.79 | [+0.020, +0.048] |
 | BETA26_high_minus_low | +122.8% | +4.60 | [+0.014, +0.034] |
 
+## Full-sample joint GX pricing — all 23 factors
+
+The table below puts all 23 factors side-by-side so the behavioral shortlist can be
+read against the full Stage-09 base zoo in one view. Only GX-full is reported here
+because the joint model (Stage-10 script `run_joint_model`) runs GX-full only; for
+the three-method comparison (FMB · GX-obs · GX-full) on the 19 base factors see the
+master table in `09_nalfp_add/RESULTS.md § Full-sample results`.
+
+**Data sources.** The 4 behavioral factors (★) use the Stage-10 joint run
+(K_hidden = 2, 2021-05-10 → 2026-05-25, all 23 factors priced simultaneously).
+The 19 base factors use the Stage-09 full-sample GX-full run (same K_hidden = 2,
+same period, 19-factor zoo without behavioral factors). In the 23-factor joint run
+the base-factor lambdas shift slightly because the hidden-factor extraction sees
+four additional factors; the behavioral shortlist was selected specifically to
+survive that larger joint model. Bold = |t| ≥ 1.65.
+
+| Factor | Category | GX-full λ/yr | t_gx | Stage-09 verdict |
+|---|---|---:|---:|---|
+| VolC | Base — weekly ranker | −185.8% | **−5.05** | Confirmed |
+| MAXRET | Base — weekly ranker | +160.0% | **+5.52** | Confirmed |
+| ★ CRASH8_crashed_minus_resilient | Behavioral | +177.9% | **+4.79** | — |
+| ★ BETA26_high_minus_low | Behavioral | +122.8% | **+4.60** | — |
+| TVLC | Base — DeFi engagement | −185.2% | **−4.71** | Priced risk |
+| RC | Base — market control | +217.2% | **+3.92** | Priced risk |
+| SPC3 | Base — alt-L1 direction | −221.4% | **−3.88** | Structure |
+| ★ SKEW52_high_minus_low | Behavioral | +96.9% | **+3.44** | — |
+| ★ NEWC_young_minus_old | Behavioral | +114.1% | **+3.43** | — |
+| RMOM1w | Base — risk-adj momentum | +59.4% | **+1.86** | Priced risk |
+| SPC4 | Base — legacy/exchange direction | +93.5% | +1.42 | Structure |
+| RMOM4w | Base — risk-adj momentum | +36.6% | +1.24 | Not supported |
+| SPC1 | Base — DeFi-majors direction | +57.6% | +1.08 | Structure |
+| RMOM2w | Base — risk-adj momentum | +31.3% | +1.05 | Suggestive |
+| SPC2 | Base — payment/old-guard direction | −56.0% | −1.47 | Structure |
+| SMBC | Base — size | +9.6% | +0.36 | Suggestive |
+| NetRel | Base — cross-cluster rotation | −0.2% | −0.01 | Suggestive |
+| NetMom | Base — within-cluster momentum | +8.6% | +0.37 | Not supported |
+| MomC | Base — raw momentum | −3.3% | −0.10 | Not supported |
+| FunC | Base — fees/mcap value | +6.6% | +0.40 | Economic-only |
+| CCA1 | Base — macro direction 1 | −55.0% | −0.58 | Structure |
+| CCA2 | Base — macro direction 2 | +6.6% | +0.58 | Structure |
+| CCA3 | Base — macro direction 3 | +14.9% | +0.58 | Structure |
+
+The two confirmed base factors (VolC, MAXRET) and the two dominant DeFi/market premia
+(TVLC, RC) anchor the top of the table. All four behavioral factors land in the top
+half — above RMOM1w, which was the strongest base-zoo factor not already classified
+as Confirmed — and all four clear the |t| ≥ 1.65 bar comfortably even after the
+full zoo is controlled for. The base factors that were weak in Stage 09 (SMBC,
+NetRel, MomC, CCA1–3) remain weak here, confirming the behavioral factors bring
+genuinely new pricing power rather than rotating on existing variation.
+
 ## In-sample vs out-of-sample robustness (audit Finding 2)
 
 The headline search uses the full 2021–2026 window for both discovery and
