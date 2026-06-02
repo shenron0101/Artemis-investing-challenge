@@ -20,28 +20,28 @@ Stage 09 was |t| >= 1.65.
 ## Search result
 
 - Candidate definitions tested: 182
-- GX-full hits at |t| >= 2.0 (uncorrected): 102
-- GX-full hits at |t| >= 1.65 (uncorrected): 112
+- GX-full hits at |t| >= 2.0 (uncorrected): 106
+- GX-full hits at |t| >= 1.65 (uncorrected): 118
 
 Top one-by-one candidates:
 
 | Candidate | Behavior interpretation | GX-full lambda | t_gx | Nearest Stage-09 factor |
 |---|---|---:|---:|---|
-| absret_mean_12w__high_minus_low | high attention shock from large absolute moves | +225.0% | +6.17 | 0.78 vs VolC |
-| absret_mean_12w__low_minus_high | low attention shock from large absolute moves | -225.0% | -6.17 | 0.78 vs VolC |
-| maxret_12w__low_minus_high | low maximum-return lottery salience | -189.3% | -6.16 | 0.67 vs VolC |
-| maxret_12w__high_minus_low | high maximum-return lottery salience | +189.3% | +6.16 | 0.67 vs VolC |
-| vol_12w__high_minus_low | high volatility/lottery demand | +206.9% | +5.99 | 0.81 vs VolC |
-| vol_12w__low_minus_high | low volatility/lottery demand | -206.9% | -5.99 | 0.81 vs VolC |
-| idvol_12w__high_minus_low | high volatility/lottery demand | +203.6% | +5.96 | 0.79 vs VolC |
-| idvol_12w__low_minus_high | low volatility/lottery demand | -203.6% | -5.96 | 0.79 vs VolC |
-| maxret_8w__low_minus_high | low maximum-return lottery salience | -228.9% | -5.80 | 0.77 vs VolC |
-| maxret_8w__high_minus_low | high maximum-return lottery salience | +228.9% | +5.80 | 0.77 vs VolC |
-| maxret_52w__low_minus_high | low maximum-return lottery salience | -180.6% | -5.56 | 0.47 vs RC |
-| maxret_52w__high_minus_low | high maximum-return lottery salience | +180.6% | +5.56 | 0.47 vs RC |
-| maxret_3w__low_minus_high | low maximum-return lottery salience | -167.4% | -5.53 | 0.79 vs MAXRET |
-| maxret_3w__high_minus_low | high maximum-return lottery salience | +167.4% | +5.53 | 0.79 vs MAXRET |
-| attention_absret_xs_4w__high_minus_low | high attention shock from large absolute moves | +150.8% | +5.39 | 0.89 vs VolC |
+| maxret_3w__low_minus_high | low maximum-return lottery salience | -158.9% | -6.02 | 0.79 vs MAXRET |
+| maxret_3w__high_minus_low | high maximum-return lottery salience | +158.9% | +6.02 | 0.79 vs MAXRET |
+| skew_52w__low_minus_high | low realized skewness; lottery memory and right-tail salience | -149.7% | -5.68 | 0.33 vs RC |
+| SKEW52_high_minus_low | high realized skewness; lottery memory and right-tail salience | +149.7% | +5.68 | 0.33 vs RC |
+| vol_26w__high_minus_low | high volatility/lottery demand | +197.9% | +5.35 | 0.69 vs VolC |
+| vol_26w__low_minus_high | low volatility/lottery demand | -197.9% | -5.35 | 0.69 vs VolC |
+| maxret_26w__low_minus_high | low maximum-return lottery salience | -179.6% | -5.35 | 0.58 vs RC |
+| maxret_26w__high_minus_low | high maximum-return lottery salience | +179.6% | +5.35 | 0.58 vs RC |
+| absret_mean_12w__high_minus_low | high attention shock from large absolute moves | +206.6% | +5.30 | 0.78 vs VolC |
+| absret_mean_12w__low_minus_high | low attention shock from large absolute moves | -206.6% | -5.30 | 0.78 vs VolC |
+| maxret_52w__low_minus_high | low maximum-return lottery salience | -168.3% | -5.12 | 0.46 vs RC |
+| maxret_52w__high_minus_low | high maximum-return lottery salience | +168.3% | +5.12 | 0.46 vs RC |
+| attention_absret_xs_4w__high_minus_low | high attention shock from large absolute moves | +136.9% | +5.12 | 0.89 vs VolC |
+| attention_absret_xs_4w__low_minus_high | low attention shock from large absolute moves | -136.9% | -5.12 | 0.89 vs VolC |
+| absret_mean_4w__low_minus_high | low attention shock from large absolute moves | -136.9% | -5.12 | 0.89 vs VolC |
 
 Many of the strongest raw hits are volatility or max-return variants, which are
 close to Stage-09 VolC/MAXRET. The final shortlist below keeps factors that are
@@ -54,23 +54,23 @@ per-test |t| >= 2.0 bar admits false positives by construction: under the null
 about 5% of tests would clear that bar by luck. We therefore report two
 corrections across the full family of 182 tests.
 
-- **Uncorrected** hits at |t| >= 2.0: **102**
-  (56% of all tests).
+- **Uncorrected** hits at |t| >= 2.0: **106**
+  (58% of all tests).
 - **Bonferroni** (family-wise error rate 5%) raises the bar to
   |t| > **3.64**; only
-  **52** candidates survive.
+  **60** candidates survive.
 - **Benjamini-Hochberg** (false-discovery rate 5%) leaves
-  **96** candidates.
+  **104** candidates.
 
 The four headline factors are not just BH survivors — they clear the much harsher
 Bonferroni bar as well:
 
 | Factor | search t_gx | raw p | BH q-value | Bonferroni pass |
 |---|---:|---:|---:|---|
-| NEWC_young_minus_old | +4.19 | 2.74e-05 | 1.39e-04 | yes |
-| SKEW52_high_minus_low | +4.66 | 3.19e-06 | 2.07e-05 | yes |
-| CRASH8_crashed_minus_resilient | +4.08 | 4.56e-05 | 2.07e-04 | yes |
-| BETA26_high_minus_low | +3.93 | 8.51e-05 | 3.48e-04 | yes |
+| NEWC_young_minus_old | +3.71 | 2.10e-04 | 6.60e-04 | yes |
+| SKEW52_high_minus_low | +5.68 | 1.33e-08 | 6.05e-07 | yes |
+| CRASH8_crashed_minus_resilient | +3.51 | 4.49e-04 | 1.32e-03 | no |
+| BETA26_high_minus_low | +3.41 | 6.51e-04 | 1.74e-03 | no |
 
 So while the 56% raw hit rate is correctly read as exploratory mining, the
 specific factors carried into the strategy survive a full family-wise correction
@@ -84,60 +84,10 @@ factor zoo. They still pass GX-full significance after hidden factors are added.
 
 | Factor | GX-full lambda | t_gx | Weekly lambda 95% CI |
 |---|---:|---:|---|
-| NEWC_young_minus_old | +114.1% | +3.43 | [+0.009, +0.034] |
-| SKEW52_high_minus_low | +96.9% | +3.44 | [+0.008, +0.029] |
-| CRASH8_crashed_minus_resilient | +177.9% | +4.79 | [+0.020, +0.048] |
-| BETA26_high_minus_low | +122.8% | +4.60 | [+0.014, +0.034] |
-
-## Full-sample joint GX pricing — all 23 factors
-
-The table below puts all 23 factors side-by-side so the behavioral shortlist can be
-read against the full Stage-09 base zoo in one view. Only GX-full is reported here
-because the joint model (Stage-10 script `run_joint_model`) runs GX-full only; for
-the three-method comparison (FMB · GX-obs · GX-full) on the 19 base factors see the
-master table in `03_nalfp_add/RESULTS.md § Full-sample results`.
-
-**Data sources.** The 4 behavioral factors (★) use the Stage-10 joint run
-(K_hidden = 2, 2021-05-10 → 2026-05-25, all 23 factors priced simultaneously).
-The 19 base factors use the Stage-09 full-sample GX-full run (same K_hidden = 2,
-same period, 19-factor zoo without behavioral factors). In the 23-factor joint run
-the base-factor lambdas shift slightly because the hidden-factor extraction sees
-four additional factors; the behavioral shortlist was selected specifically to
-survive that larger joint model. Bold = |t| ≥ 1.65.
-
-| Factor | Category | GX-full λ/yr | t_gx | Stage-09 verdict |
-|---|---|---:|---:|---|
-| VolC | Base — weekly ranker | −185.8% | **−5.05** | Confirmed |
-| MAXRET | Base — weekly ranker | +160.0% | **+5.52** | Confirmed |
-| ★ CRASH8_crashed_minus_resilient | Behavioral | +177.9% | **+4.79** | — |
-| ★ BETA26_high_minus_low | Behavioral | +122.8% | **+4.60** | — |
-| TVLC | Base — DeFi engagement | −185.2% | **−4.71** | Priced risk |
-| RC | Base — market control | +217.2% | **+3.92** | Priced risk |
-| SPC3 | Base — alt-L1 direction | −221.4% | **−3.88** | Structure |
-| ★ SKEW52_high_minus_low | Behavioral | +96.9% | **+3.44** | — |
-| ★ NEWC_young_minus_old | Behavioral | +114.1% | **+3.43** | — |
-| RMOM1w | Base — risk-adj momentum | +59.4% | **+1.86** | Priced risk |
-| SPC4 | Base — legacy/exchange direction | +93.5% | +1.42 | Structure |
-| RMOM4w | Base — risk-adj momentum | +36.6% | +1.24 | Not supported |
-| SPC1 | Base — DeFi-majors direction | +57.6% | +1.08 | Structure |
-| RMOM2w | Base — risk-adj momentum | +31.3% | +1.05 | Suggestive |
-| SPC2 | Base — payment/old-guard direction | −56.0% | −1.47 | Structure |
-| SMBC | Base — size | +9.6% | +0.36 | Suggestive |
-| NetRel | Base — cross-cluster rotation | −0.2% | −0.01 | Suggestive |
-| NetMom | Base — within-cluster momentum | +8.6% | +0.37 | Not supported |
-| MomC | Base — raw momentum | −3.3% | −0.10 | Not supported |
-| FunC | Base — fees/mcap value | +6.6% | +0.40 | Economic-only |
-| CCA1 | Base — macro direction 1 | −55.0% | −0.58 | Structure |
-| CCA2 | Base — macro direction 2 | +6.6% | +0.58 | Structure |
-| CCA3 | Base — macro direction 3 | +14.9% | +0.58 | Structure |
-
-The two confirmed base factors (VolC, MAXRET) and the two dominant DeFi/market premia
-(TVLC, RC) anchor the top of the table. All four behavioral factors land in the top
-half — above RMOM1w, which was the strongest base-zoo factor not already classified
-as Confirmed — and all four clear the |t| ≥ 1.65 bar comfortably even after the
-full zoo is controlled for. The base factors that were weak in Stage 09 (SMBC,
-NetRel, MomC, CCA1–3) remain weak here, confirming the behavioral factors bring
-genuinely new pricing power rather than rotating on existing variation.
+| NEWC_young_minus_old | +100.6% | +2.40 | [+0.004, +0.035] |
+| SKEW52_high_minus_low | +107.6% | +4.19 | [+0.011, +0.030] |
+| CRASH8_crashed_minus_resilient | +172.5% | +3.73 | [+0.016, +0.051] |
+| BETA26_high_minus_low | +89.4% | +3.30 | [+0.007, +0.027] |
 
 ## In-sample vs out-of-sample robustness (audit Finding 2)
 
@@ -151,10 +101,10 @@ and keeps the same sign OOS.
 
 | Factor | IS lambda | IS t_gx | OOS lambda | OOS t_gx |
 |---|---:|---:|---:|---:|
-| NEWC_young_minus_old | -52.7% | -1.18 | -20.2% | -0.49 |
-| SKEW52_high_minus_low | +19.4% | +0.68 | +29.6% | +1.06 |
-| CRASH8_crashed_minus_resilient | +0.6% | +0.01 | -20.4% | -0.57 |
-| BETA26_high_minus_low | +0.6% | +0.02 | +56.9% | +1.24 |
+| NEWC_young_minus_old | -49.3% | -1.06 | -5.1% | -0.13 |
+| SKEW52_high_minus_low | +18.7% | +0.67 | +45.4% | +1.16 |
+| CRASH8_crashed_minus_resilient | -2.5% | -0.04 | -6.9% | -0.18 |
+| BETA26_high_minus_low | +4.9% | +0.20 | +52.0% | +1.11 |
 
 OOS windows are short (~79 weeks), so OOS
 t-stats are naturally weaker than full-sample ones; the test we apply is

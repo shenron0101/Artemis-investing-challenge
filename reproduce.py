@@ -80,6 +80,8 @@ def stage_02() -> None:
 
 
 def stage_03() -> None:
+    # Note: 03_reconstruct_mcap_panel.py fetches supply data from CoinGecko
+    # for 63 coins and typically takes 5–10 minutes.
     scripts = [
         "03_nalfp_add/00_network_dynamics.py",
         "03_nalfp_add/01_universe_coverage.py",

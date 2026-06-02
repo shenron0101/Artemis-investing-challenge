@@ -64,9 +64,9 @@ def load_manifest():
 
 
 def load_component_returns():
-    """Load pre-built L/S returns for each component from gx5y_factor_zoo or viz_data."""
-    # Try gx5y_factor_zoo first (has SMBC, MomC, VolC, NetMom, NetRel)
-    gx = pd.read_parquet(PANEL_DIR / "gx5y_factor_zoo.parquet")
+    """Load pre-built L/S returns for each component from gx5y_full_factor_zoo or viz_data."""
+    # Try gx5y_full_factor_zoo first (has SMBC, MomC, VolC, NetMom, NetRel)
+    gx = pd.read_parquet(PANEL_DIR / "gx5y_full_factor_zoo.parquet")
     gx["week"] = pd.to_datetime(gx["week"])
     gx = gx.set_index("week")
 

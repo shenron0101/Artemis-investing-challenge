@@ -77,9 +77,9 @@ downward extreme.
 
 | Metric | In-Sample | Out-of-Sample |
 |---|---|---|
-| Annualised Return (L/S) | 24.5% | -23.1% |
-| Sharpe Ratio | 0.51 | -0.44 |
-| Return t-stat (NW) | 0.84 | -0.53 |
+| Annualised Return (L/S) | 26.5% | -25.1% |
+| Sharpe Ratio | 0.56 | -0.48 |
+| Return t-stat (NW) | 0.90 | -0.59 |
 | GX-full λ (joint) | +177.9%/yr (t = +4.79) | — |
 
 ---
@@ -95,12 +95,12 @@ Strongest in the behavioral shortlist. Highly significant at |t| ≥ 2 in the jo
 
 | Period | JB | p-value | Normal? |
 |---|---|---|---|
-| IS  | 73.3  | 0.0000  | No |
-| OOS | 51.2 | 0.0000 | No |
+| IS  | 70.8  | 0.0000  | No |
+| OOS | 57.0 | 0.0000 | No |
 
 ### ADF Stationarity
 
-ADF = -7.885, p = 0.0000 → **Stationary**
+ADF = -7.880, p = 0.0000 → **Stationary**
 
 ---
 

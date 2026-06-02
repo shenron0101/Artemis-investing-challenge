@@ -25,7 +25,7 @@ them up too high. Calm assets get relatively ignored and left cheap.
 
 **Yes — and it is the strongest confirmed factor in our 5-year study.**
 
-The IC t-stat is **-3.32** in-sample and **-4.31**
+The IC t-stat is **-3.29** in-sample and **-4.14**
 out-of-sample. Both are well above the |t| ≥ 2 significance threshold, and the effect
 got *stronger* out-of-sample. The Giglio-Xiu pricing test also confirms it as a priced
 systematic risk (λ = -185.8%/yr, t = -5.05).
@@ -41,12 +41,12 @@ The IC (Information Coefficient) measures the Spearman correlation between the
 - A **negative IC** means: higher-volatility rank → lower next-week return.
 - That is exactly what we predict! High-vol coins underperform; low-vol coins outperform.
 
-So the raw IC of **-0.0615** (IS) is the factor **working**, not
-failing. The direction-adjusted IC is **+0.0615** (IS),
-**+0.1274** (OOS) — positive in both periods.
+So the raw IC of **-0.0608** (IS) is the factor **working**, not
+failing. The direction-adjusted IC is **+0.0608** (IS),
+**+0.1247** (OOS) — positive in both periods.
 
-The t-stat at **3.32** (IS) and
-**4.31** (OOS) confirms the signal is statistically
+The t-stat at **3.29** (IS) and
+**4.14** (OOS) confirms the signal is statistically
 real, far above the |t| = 2 bar.
 
 ---
@@ -55,12 +55,12 @@ real, far above the |t| = 2 bar.
 
 | Metric | In-Sample | Out-of-Sample |
 |---|---|---|
-| Weeks | 184 | 79 |
-| Annualised Return | -21.9% | 20.0% |
-| Sharpe Ratio | -0.51 | 0.54 |
-| Mean IC (raw) | -0.0615 | -0.1274 |
-| IC t-stat (NW) | **-3.32** (significant) | **-4.31** (significant) |
-| Return t-stat (NW) | -0.77 (not significant) | +0.61 (not significant) |
+| Weeks | 185 | 79 |
+| Annualised Return | -22.4% | 17.9% |
+| Sharpe Ratio | -0.52 | 0.48 |
+| Mean IC (raw) | -0.0608 | -0.1247 |
+| IC t-stat (NW) | **-3.29** (significant) | **-4.14** (significant) |
+| Return t-stat (NW) | -0.79 (not significant) | +0.54 (not significant) |
 
 Note: the Sharpe is low or negative because the **ranking power is strong** (high IC)
 but the **L/S spread return is weak**. This is the key puzzle — see "Why the Sharpe is
@@ -70,10 +70,10 @@ Misleading" below.
 
 | Statistic | IS | OOS |
 |---|---|---|
-| Mean weekly return | -0.421% | 0.385% |
-| Std (weekly) | 5.994% | 5.136% |
-| Skewness | -0.75 | -1.03 |
-| Excess Kurtosis | 1.20 | 2.92 |
+| Mean weekly return | -0.432% | 0.345% |
+| Std (weekly) | 5.979% | 5.146% |
+| Skewness | -0.75 | -1.01 |
+| Excess Kurtosis | 1.21 | 2.85 |
 
 ---
 
@@ -124,8 +124,8 @@ within a long-only portfolio — using VolC as a tilt, not a pure spread trade.
 
 ### Newey-West t-stat on IC
 
-- **IS IC t = -3.32** — |t| = 3.32 — **significant**
-- **OOS IC t = -4.31** — |t| = 4.31 — **significant**
+- **IS IC t = -3.29** — |t| = 3.29 — **significant**
+- **OOS IC t = -4.14** — |t| = 4.14 — **significant**
 
 The negative sign reflects direction (see above). Both are well above the |t| = 2 bar.
 The OOS t-stat is *larger in magnitude* than IS — the signal strengthened rather than
@@ -135,12 +135,12 @@ fading, providing the strongest possible OOS confirmation.
 
 | Period | JB Statistic | p-value | Normal? |
 |---|---|---|---|
-| IS | 26.8 | 0.0000 | No |
-| OOS | 36.8 | 0.0000 | No |
+| IS | 27.0 | 0.0000 | No |
+| OOS | 35.0 | 0.0000 | No |
 
 ### ADF Stationarity Test
 
-- ADF statistic: **-7.169** | p-value: **0.0000**
+- ADF statistic: **-7.172** | p-value: **0.0000**
 - Verdict: **Stationary (mean-reverting)**
 
 ### Giglio-Xiu Pricing Result
@@ -215,8 +215,8 @@ the real story is risk-adjusted, not raw-return.
 
 ![IS vs OOS](artifacts/figures/volc_07_is_oos_comparison.png)
 
-IC improves OOS (from -0.0615 to -0.1274 raw), and the
-t-stat strengthens. The Sharpe recovers from -0.51 IS to 0.54 OOS
+IC improves OOS (from -0.0608 to -0.1247 raw), and the
+t-stat strengthens. The Sharpe recovers from -0.52 IS to 0.48 OOS
 as the post-2024 market entered a more regime-stable period.
 
 ### Cumulative Return by Volatility Tercile

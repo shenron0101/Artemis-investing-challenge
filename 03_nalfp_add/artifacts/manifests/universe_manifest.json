@@ -1,6 +1,6 @@
 {
   "stage": "03_nalfp_add",
-  "built": "2026-05-29 15:01 UTC",
+  "built": "2026-06-02 04:15 UTC",
   "candidate_pool": {
     "source": "Coins.md (CoinGecko snapshot 2026-05-08)",
     "n_total": 113,
@@ -67,21 +67,21 @@
       "ZEC"
     ],
     "common_start": "2021-05-10",
-    "last_week": "2026-05-25",
-    "balanced_weeks": 264,
+    "last_week": "2026-06-01",
+    "balanced_weeks": 265,
     "note": "balanced, frozen membership; rectangular matrix for Sparse PCA / CCA"
   },
   "split": {
     "common_start": "2021-05-10",
     "in_sample": [
       "2021-05-10",
-      "2024-11-11"
+      "2024-11-18"
     ],
     "out_of_sample": [
-      "2024-11-18",
-      "2026-05-25"
+      "2024-11-25",
+      "2026-06-01"
     ],
-    "in_sample_weeks": 184,
+    "in_sample_weeks": 185,
     "out_of_sample_weeks": 80,
     "rationale": "common_start is the earliest week all backbone coins are simultaneously live; OOS is the most recent 30% of that balanced span."
   },

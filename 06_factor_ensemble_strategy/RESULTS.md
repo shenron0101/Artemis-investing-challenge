@@ -7,8 +7,8 @@ sub-books for robust weekly rankers, the MispricingM composite, and priced-risk
 tilts, then allocates between those books using only prior realized book returns
 plus the `engine.py` XGBoost regime probabilities.
 
-Train/test split: weeks before `2024-11-25` are in-sample, and the final 79
-weeks are out-of-sample.
+Train/test split: weeks before `2024-12-02` are in-sample, and the
+final 79 weeks are out-of-sample.
 
 ## Sub-Books
 
@@ -27,50 +27,50 @@ the priced-risk sleeve.
 
 | Variant            | mispricing   | core_rank   | priced_tilt   |
 |:-------------------|:-------------|:------------|:--------------|
-| Sharpe Ensemble    | 80.8%        | 15.3%       | 3.9%          |
-| Balanced Ensemble  | 54.8%        | 36.7%       | 8.5%          |
-| Defensive Ensemble | 60.4%        | 35.7%       | 3.9%          |
+| Sharpe Ensemble    | 81.0%        | 15.2%       | 3.8%          |
+| Balanced Ensemble  | 54.9%        | 36.6%       | 8.5%          |
+| Defensive Ensemble | 60.6%        | 35.6%       | 3.8%          |
 
 ## Full-Window Performance
 
 | Strategy | Sharpe | AnnRet | AnnVol | MaxDD | Hit | Weeks |
 |---|---:|---:|---:|---:|---:|---:|
-| Sharpe Ensemble | +1.27 | +64.7% | 51.1% | -45.3% | 53% | 374 |
-| Balanced Ensemble | +1.18 | +51.1% | 43.4% | -41.4% | 54% | 374 |
-| Defensive Ensemble | +1.21 | +54.4% | 45.0% | -42.4% | 53% | 374 |
-| mispricing | +1.24 | +76.5% | 61.9% | -46.6% | 54% | 374 |
-| core_rank | +0.53 | +18.5% | 35.1% | -49.3% | 49% | 374 |
-| priced_tilt | +0.30 | +11.1% | 36.9% | -49.1% | 47% | 374 |
-| EW Market | +0.82 | +65.7% | 80.5% | -80.6% | 55% | 373 |
-| BTC | +0.92 | +54.4% | 59.0% | -75.2% | 52% | 373 |
+| Sharpe Ensemble | +1.28 | +65.4% | 51.2% | -45.1% | 53% | 375 |
+| Balanced Ensemble | +1.19 | +51.6% | 43.6% | -41.3% | 54% | 375 |
+| Defensive Ensemble | +1.22 | +55.0% | 45.2% | -42.2% | 53% | 375 |
+| mispricing | +1.25 | +77.4% | 62.0% | -46.3% | 54% | 375 |
+| core_rank | +0.52 | +18.5% | 35.2% | -49.4% | 49% | 375 |
+| priced_tilt | +0.32 | +11.7% | 37.1% | -49.3% | 47% | 375 |
+| EW Market | +0.82 | +66.1% | 80.4% | -80.6% | 55% | 374 |
+| BTC | +0.92 | +53.9% | 58.9% | -75.2% | 52% | 374 |
 
 
 ## In-Sample Performance
 
 | Strategy | Sharpe | AnnRet | AnnVol | MaxDD | Hit | Weeks |
 |---|---:|---:|---:|---:|---:|---:|
-| Sharpe Ensemble | +1.36 | +74.0% | 54.4% | -45.3% | 54% | 295 |
-| Balanced Ensemble | +1.28 | +59.7% | 46.7% | -41.4% | 55% | 295 |
-| Defensive Ensemble | +1.31 | +63.2% | 48.4% | -42.4% | 53% | 295 |
-| mispricing | +1.32 | +87.0% | 65.8% | -46.6% | 55% | 295 |
-| core_rank | +0.60 | +23.0% | 38.3% | -49.3% | 49% | 295 |
-| priced_tilt | +0.47 | +17.8% | 38.2% | -49.1% | 49% | 295 |
-| EW Market | +1.10 | +92.1% | 83.4% | -80.6% | 58% | 295 |
-| BTC | +1.14 | +72.1% | 63.2% | -75.2% | 54% | 295 |
+| Sharpe Ensemble | +1.42 | +77.9% | 55.0% | -45.1% | 54% | 296 |
+| Balanced Ensemble | +1.33 | +63.0% | 47.2% | -41.3% | 55% | 296 |
+| Defensive Ensemble | +1.36 | +66.7% | 48.9% | -42.2% | 53% | 296 |
+| mispricing | +1.38 | +91.4% | 66.4% | -46.3% | 55% | 296 |
+| core_rank | +0.64 | +25.0% | 38.7% | -49.4% | 49% | 296 |
+| priced_tilt | +0.49 | +18.8% | 38.4% | -49.3% | 49% | 296 |
+| EW Market | +1.14 | +95.0% | 83.5% | -80.6% | 58% | 296 |
+| BTC | +1.15 | +72.5% | 63.1% | -75.2% | 54% | 296 |
 
 
 ## Out-of-Sample Performance
 
 | Strategy | Sharpe | AnnRet | AnnVol | MaxDD | Hit | Weeks |
 |---|---:|---:|---:|---:|---:|---:|
-| Sharpe Ensemble | +0.84 | +29.9% | 35.8% | -24.7% | 51% | 79 |
-| Balanced Ensemble | +0.68 | +18.8% | 27.6% | -18.3% | 53% | 79 |
-| Defensive Ensemble | +0.75 | +21.6% | 29.0% | -19.7% | 53% | 79 |
-| mispricing | +0.85 | +37.2% | 44.1% | -29.9% | 52% | 79 |
-| core_rank | +0.11 | +2.0% | 18.1% | -18.8% | 47% | 79 |
-| priced_tilt | -0.43 | -13.7% | 31.8% | -32.6% | 39% | 79 |
-| EW Market | -0.51 | -34.4% | 67.2% | -68.3% | 45% | 78 |
-| BTC | -0.33 | -12.3% | 37.7% | -46.7% | 47% | 78 |
+| Sharpe Ensemble | +0.57 | +18.7% | 33.1% | -19.7% | 49% | 79 |
+| Balanced Ensemble | +0.37 | +9.1% | 24.8% | -13.7% | 52% | 79 |
+| Defensive Ensemble | +0.43 | +11.2% | 26.1% | -15.1% | 52% | 79 |
+| mispricing | +0.60 | +24.8% | 41.4% | -25.9% | 51% | 79 |
+| core_rank | -0.37 | -5.9% | 15.9% | -18.8% | 46% | 79 |
+| priced_tilt | -0.47 | -14.7% | 31.5% | -32.3% | 39% | 79 |
+| EW Market | -0.66 | -43.4% | 65.3% | -65.2% | 45% | 78 |
+| BTC | -0.44 | -16.7% | 37.6% | -46.7% | 46% | 78 |
 
 
 ## Baseline & ablation variants (audit Findings 5 & 6)
@@ -83,10 +83,10 @@ OOS (79 weeks) net performance:
 
 | Strategy | Sharpe | AnnRet | AnnVol | MaxDD | Hit | Weeks |
 |---|---:|---:|---:|---:|---:|---:|
-| SE Priced-Tilt Off | +0.90 | +34.2% | 37.8% | -24.0% | 53% | 79 |
-| SE Priced-Tilt 5% cap | +0.87 | +31.8% | 36.8% | -24.4% | 52% | 79 |
-| SE No Regime Tilt | +0.80 | +27.9% | 35.1% | -25.6% | 51% | 79 |
-| MispricingM Only | +0.85 | +37.2% | 44.1% | -29.9% | 52% | 79 |
+| SE Priced-Tilt Off | +0.63 | +22.1% | 34.9% | -19.9% | 52% | 79 |
+| SE Priced-Tilt 5% cap | +0.59 | +20.2% | 34.0% | -19.6% | 51% | 79 |
+| SE No Regime Tilt | +0.52 | +17.0% | 32.5% | -20.9% | 49% | 79 |
+| MispricingM Only | +0.60 | +24.8% | 41.4% | -25.9% | 51% | 79 |
 
 
 - **SE Priced-Tilt Off / 5% cap** (Finding 6): the priced-risk sleeve is OOS-toxic
@@ -107,12 +107,12 @@ across this grid is robust to the priors; large swings are a fragility flag.
 
 | regime_tilt   |   priced_cap |   oos_sharpe |   oos_ann_return |   oos_max_dd |
 |:--------------|-------------:|-------------:|-----------------:|-------------:|
-| on            |         0.18 |     0.836591 |         0.299255 |    -0.247094 |
-| on            |         0.05 |     0.86591  |         0.318499 |    -0.244019 |
-| on            |         0    |     0.904567 |         0.34194  |    -0.239626 |
-| off           |         0.18 |     0.795781 |         0.279136 |    -0.256464 |
-| off           |         0.05 |     0.865285 |         0.320861 |    -0.248731 |
-| off           |         0    |     0.905224 |         0.345983 |    -0.244879 |
+| on            |         0.18 |     0.565309 |         0.186893 |    -0.197332 |
+| on            |         0.05 |     0.594638 |         0.202094 |    -0.196195 |
+| on            |         0    |     0.633491 |         0.220886 |    -0.199287 |
+| off           |         0.18 |     0.524423 |         0.170245 |    -0.208796 |
+| off           |         0.05 |     0.596729 |         0.204759 |    -0.202384 |
+| off           |         0    |     0.63697  |         0.224955 |    -0.206449 |
 
 ## Activation & regime-tilt priors — derivation (audit Finding 5)
 
