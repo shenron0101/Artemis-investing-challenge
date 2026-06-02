@@ -1,0 +1,33 @@
+# Core data / numerics
+pandas>=2.0
+numpy>=1.26
+pyarrow>=14.0
+scipy>=1.11
+
+# Machine learning
+scikit-learn>=1.4
+xgboost>=2.0
+
+# Network analysis (stage 03 — network producer)
+networkx>=3.0
+python-louvain>=0.16        # imported as `community`
+
+# Visualisation
+matplotlib>=3.8
+plotly>=5.18
+kaleido>=0.2.1              # plotly PNG export
+
+# Data collection (stage 01)
+requests>=2.31
+tenacity>=8.2
+PyYAML>=6.0
+python-dotenv>=1.0
+tqdm>=4.66
+
+# Serialisation / utilities
+pyarrow>=14.0               # parquet (already listed above)
+tabulate>=0.9               # markdown tables in RESULTS.md
+
+# Optional: LaTeX report compilation
+# Install a TeX distribution separately (e.g. TeX Live, MiKTeX)
+# then compile with: pdflatex Artemis_Track1_Report.tex (run twice)
