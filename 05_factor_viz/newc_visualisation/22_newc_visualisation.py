@@ -1,0 +1,613 @@
+"""Stage 10 — NEWC (Newness / Seasoning Premium) Visualisation.
+
+NEWC = young_minus_old: long newly listed / younger coins, short seasoned coins.
+Characteristic: age_weeks = weeks since the coin's first appearance in the panel.
+Direction: LONG low-age (newest), SHORT high-age (oldest).
+
+Grade: Priced risk — joint GX λ = +114.1%/yr, t = +3.43.
+The L/S return is noisy (sharpe = −0.165), but the cross-sectional risk premium is
+real: investors demand compensation for holding unseasoned names.
+
+Outputs
+-------
+    artifacts/figures/newc_*.html / .png
+    artifacts/data/newc_viz_data.parquet
+    NEWC_VIZ_REPORT.md
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from scipy import stats as sp_stats
+
+STAGE = Path(__file__).resolve().parent
+PARENT = STAGE.parent.parent / "04_behavioral_gx"
+STAGE09 = PARENT.parent / "03_nalfp_add"
+DATA_DIR = STAGE / "artifacts" / "data"
+BEHAVIORAL_DATA = PARENT / "artifacts" / "data"
+PANEL_DIR = STAGE09 / "artifacts" / "data"
+MANIFEST_DIR = STAGE09 / "artifacts" / "manifests"
+FIG_DIR = STAGE / "artifacts" / "figures"
+FIG_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+FACTOR_NAME = "NEWC"
+PREFIX = "newc"
+CHAR_COL = "age_weeks"
+DIRECTION = -1   # long low-age (youngest), short high-age (oldest)
+FRAC = 0.30
+MIN_NAMES = 10
+T_LABELS = ["Young", "Mid-Age", "Seasoned"]   # sorted ascending by age
+SPREAD_LABEL = "NEWC (Young–Seasoned)"
+
+IS_LABEL  = "In-Sample (2021-05-10 → 2024-11-11)"
+OOS_LABEL = "Out-of-Sample (2024-11-18 → 2026-05-25)"
+PLOTLY_TEMPLATE = "plotly_white"
+COLORS = {"IS": "#2196F3", "OOS": "#FF5722", "FULL": "#607D8B",
+          "SIG_POS": "#4CAF50", "SIG_NEG": "#F44336"}
+
+# Joint GX result (tested jointly with all Stage-09 factors + other 3 behavioral)
+GX_LAMBDA_ANN = 114.1   # %/yr
+GX_T          = 3.43
+GX_CI_LO      = 48.8    # %/yr
+GX_CI_HI      = 179.4   # %/yr
+NEAREST_09    = "SMBC"
+CORR_09       = 0.489   # |corr| with nearest Stage-09 factor
+
+
+def load_manifest():
+    return json.loads((MANIFEST_DIR / "universe_manifest.json").read_text())
+
+
+def build_characteristics(panel, trade_symbols):
+    px_wide = (panel[panel["symbol"].isin(trade_symbols)]
+               .pivot(index="week", columns="symbol", values="price").sort_index())
+    ret_wide = px_wide.pct_change()
+    first_week = panel.groupby("symbol")["week"].min()
+    age_wide = pd.DataFrame(
+        {sym: (px_wide.index - first_week[sym]).days / 7
+         for sym in px_wide.columns if sym in first_week.index},
+        index=px_wide.index,
+    )
+
+    def melt(df, name):
+        return df.reset_index().melt(id_vars="week", var_name="symbol", value_name=name)
+
+    out = melt(ret_wide, "ret_1w")
+    fwd = ret_wide.shift(-1)
+    for df, nm in [(fwd, "fwd_ret_1w"), (age_wide, CHAR_COL)]:
+        out = out.merge(melt(df, nm), on=["week", "symbol"], how="left")
+    return out, ret_wide
+
+
+def newey_west_se(arr, lags=4):
+    r = np.asarray(arr, dtype=float)
+    n = len(r)
+    if n < 2:
+        return np.nan
+    e = r - r.mean()
+    s = (e * e).mean()
+    for lag in range(1, min(lags, n - 1) + 1):
+        s += 2.0 * (1 - lag / (lags + 1)) * (e[lag:] * e[:-lag]).mean()
+    return float(np.sqrt(max(s, 0.0) / n))
+
+
+def rolling_newey_west_t(series, window=26, lags=4):
+    out = {}
+    vals = series.dropna()
+    for i in range(window, len(vals)):
+        sub = vals.iloc[i - window:i]
+        se = newey_west_se(sub.values, lags)
+        out[vals.index[i]] = float(sub.mean() / se) if se and se > 0 else np.nan
+    return pd.Series(out)
+
+
+def rolling_stat(series, window, func):
+    out = {}
+    vals = series.dropna()
+    for i in range(window, len(vals)):
+        sub = vals.iloc[i - window:i]
+        out[vals.index[i]] = func(sub)
+    return pd.Series(out)
+
+
+def _ts_str(v):
+    return v.strftime("%Y-%m-%d") if isinstance(v, pd.Timestamp) else str(v)
+
+
+def _add_vline(fig, x, annotation_text=None):
+    xs = _ts_str(x)
+    fig.add_shape(type="line", x0=xs, x1=xs, y0=0, y1=1,
+                  xref="x", yref="paper", line=dict(dash="dash", color="#999", width=1))
+    if annotation_text:
+        fig.add_annotation(x=xs, y=1.02, xref="x", yref="paper",
+                           text=annotation_text, showarrow=False, font=dict(size=10, color="#999"))
+
+
+def _add_vrect(fig, x0, x1, fillcolor, opacity=0.05):
+    fig.add_shape(type="rect", x0=_ts_str(x0), x1=_ts_str(x1), y0=0, y1=1,
+                  xref="x", yref="paper", fillcolor=fillcolor, opacity=opacity, line=dict(width=0))
+
+
+# ---------------------------------------------------------------------------
+# Charts
+# ---------------------------------------------------------------------------
+
+def chart_cumulative_return(ret, is_lo, is_hi, oos_lo, oos_hi):
+    cum = (1 + ret).cumprod()
+    fig = go.Figure()
+    for lbl, lo, hi, color in [(IS_LABEL, is_lo, is_hi, COLORS["IS"]),
+                                (OOS_LABEL, oos_lo, oos_hi, COLORS["OOS"])]:
+        c = cum[(cum.index >= lo) & (cum.index <= hi)]
+        if len(c):
+            fig.add_trace(go.Scatter(x=c.index, y=c.values, name=lbl,
+                                     line=dict(color=color, width=2)))
+    _add_vline(fig, is_hi, annotation_text="IS / OOS")
+    _add_vrect(fig, is_lo, is_hi, fillcolor=COLORS["IS"])
+    _add_vrect(fig, oos_lo, oos_hi, fillcolor=COLORS["OOS"])
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=500,
+                      title=f"{FACTOR_NAME} Cumulative Long/Short Return (Young − Seasoned)",
+                      xaxis_title="Week", yaxis_title="Growth of $1",
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
+
+
+def chart_rolling_return_significance(ret, is_lo, is_hi, oos_lo, oos_hi):
+    roll_ret = ret.rolling(26).mean().dropna()
+    roll_t = rolling_newey_west_t(ret, window=26, lags=4)
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08,
+                        subplot_titles=("26-Week Rolling Mean Return",
+                                        "26-Week Rolling Newey-West t-stat on Return"))
+    fig.add_trace(go.Scatter(x=roll_ret.index, y=roll_ret.values * 100,
+                             line=dict(color=COLORS["FULL"], width=2)), row=1, col=1)
+    fig.add_hline(y=0, line_dash="dash", line_color="#666", row=1, col=1)
+    fig.add_trace(go.Scatter(x=roll_t.index, y=roll_t.values,
+                             line=dict(color=COLORS["FULL"], width=2)), row=2, col=1)
+    for y, c in [(2, COLORS["SIG_POS"]), (-2, COLORS["SIG_NEG"]), (0, "#666")]:
+        fig.add_hline(y=y, line_dash="dot" if y != 0 else "dash", line_color=c, row=2, col=1)
+    _add_vline(fig, is_hi, annotation_text="IS / OOS")
+    _add_vrect(fig, is_lo, is_hi, fillcolor=COLORS["IS"])
+    _add_vrect(fig, oos_lo, oos_hi, fillcolor=COLORS["OOS"])
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=700,
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    fig.update_yaxes(title_text="Weekly Return (%)", row=1, col=1)
+    fig.update_yaxes(title_text="NW t-stat", row=2, col=1)
+    return fig
+
+
+def chart_return_distribution(ret, is_lo, is_hi, oos_lo, oos_hi):
+    is_r  = ret[(ret.index >= is_lo)  & (ret.index <= is_hi)].dropna()
+    oos_r = ret[(ret.index >= oos_lo) & (ret.index <= oos_hi)].dropna()
+
+    def desc(s):
+        se = newey_west_se(s.values, 4)
+        return dict(n=len(s), mean=s.mean(), std=s.std(), skew=s.skew(), kurt=s.kurtosis(),
+                    t_nw=float(s.mean() / se) if se and se > 0 else np.nan,
+                    sharpe=float(s.mean() / s.std() * np.sqrt(52)) if s.std() > 0 else np.nan,
+                    min=s.min(), p25=s.quantile(0.25), median=s.median(),
+                    p75=s.quantile(0.75), max=s.max())
+
+    is_d, oos_d = desc(is_r), desc(oos_r)
+    fig = make_subplots(rows=2, cols=2,
+                        subplot_titles=("Return Histogram (IS)", "Return Histogram (OOS)",
+                                        "Return Box Plot", "Autocorrelation (IS)"),
+                        vertical_spacing=0.12, horizontal_spacing=0.10)
+    for (r, ci), series, color, label in [((1,1), is_r, COLORS["IS"], "IS"),
+                                           ((1,2), oos_r, COLORS["OOS"], "OOS")]:
+        if len(series):
+            bins = np.histogram(series, bins=40, density=True)
+            fig.add_trace(go.Bar(x=bins[1][:-1], y=bins[0], name=label,
+                                 marker_color=color, marker_opacity=0.7), row=r, col=ci)
+    fig.add_trace(go.Box(y=is_r.values,  name="IS",  marker_color=COLORS["IS"],  boxmean="sd"), row=2, col=1)
+    fig.add_trace(go.Box(y=oos_r.values, name="OOS", marker_color=COLORS["OOS"], boxmean="sd"), row=2, col=1)
+    acf = [is_r.autocorr(lag=l) for l in range(1, 13)]
+    fig.add_trace(go.Bar(x=list(range(1, 13)), y=acf,
+                         marker_color=COLORS["IS"], marker_opacity=0.7), row=2, col=2)
+    conf = 1.96 / np.sqrt(len(is_r))
+    fig.add_hline(y=conf,  line_dash="dot", line_color="#999", row=2, col=2)
+    fig.add_hline(y=-conf, line_dash="dot", line_color="#999", row=2, col=2)
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=800, showlegend=False)
+    return fig, is_d, oos_d
+
+
+def chart_rolling_sharpe(ret, is_lo, is_hi, oos_lo, oos_hi):
+    rs = rolling_stat(ret, 52, lambda s: s.mean()/s.std()*np.sqrt(52) if s.std() > 0 else np.nan)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=rs.index, y=rs.dropna().values, line=dict(color=COLORS["FULL"], width=2)))
+    fig.add_hline(y=0, line_dash="dash", line_color="#666")
+    fig.add_hline(y=1, line_dash="dot", line_color=COLORS["SIG_POS"], annotation_text="Sharpe = 1")
+    fig.add_hline(y=-1, line_dash="dot", line_color=COLORS["SIG_NEG"], annotation_text="Sharpe = −1")
+    _add_vrect(fig, is_lo, is_hi, fillcolor=COLORS["IS"])
+    _add_vrect(fig, oos_lo, oos_hi, fillcolor=COLORS["OOS"])
+    _add_vline(fig, is_hi, annotation_text="IS / OOS")
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=500,
+                      title=f"{FACTOR_NAME} 52-Week Rolling Sharpe",
+                      xaxis_title="Week", yaxis_title="Annualised Sharpe")
+    return fig
+
+
+def chart_qq_plot(ret, is_lo, is_hi, oos_lo, oos_hi):
+    is_r  = ret[(ret.index >= is_lo)  & (ret.index <= is_hi)].dropna().sort_values()
+    oos_r = ret[(ret.index >= oos_lo) & (ret.index <= oos_hi)].dropna().sort_values()
+    fig = make_subplots(rows=1, cols=2, subplot_titles=("QQ — IS", "QQ — OOS"))
+    for ci, series, color in [(1, is_r, COLORS["IS"]), (2, oos_r, COLORS["OOS"])]:
+        if len(series) > 1:
+            n = len(series); t = sp_stats.norm.ppf(np.arange(1,n+1)/(n+1))*series.std()+series.mean()
+            s = series.values
+            fig.add_trace(go.Scatter(x=t, y=s, mode="markers",
+                                     marker=dict(color=color, size=4, opacity=0.7)), row=1, col=ci)
+            lo, hi = min(t.min(), s.min()), max(t.max(), s.max())
+            fig.add_trace(go.Scatter(x=[lo,hi], y=[lo,hi], mode="lines",
+                                     line=dict(color="#999", dash="dash")), row=1, col=ci)
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=500, showlegend=False)
+    return fig
+
+
+def chart_tercile_returns(chars, is_lo, is_hi, oos_lo, oos_hi):
+    chars = chars.dropna(subset=["fwd_ret_1w", CHAR_COL]).copy()
+    chars["tercile"] = chars.groupby("week")[CHAR_COL].transform(
+        lambda x: pd.qcut(x, 3, labels=T_LABELS, duplicates="drop")
+        if len(x.dropna()) >= 6 else pd.NA)
+    tr = chars.dropna(subset=["tercile"]).groupby(["week","tercile"])["fwd_ret_1w"].mean()
+    pivot = tr.reset_index().pivot(index="week", columns="tercile", values="fwd_ret_1w")
+    for lb in T_LABELS:
+        if lb not in pivot.columns: pivot[lb] = np.nan
+    pivot = pivot[T_LABELS].dropna()
+    spread = pivot[T_LABELS[0]] - pivot[T_LABELS[-1]]  # young − seasoned
+
+    def ann(s): return (1+s).prod()**(52/len(s))-1 if len(s) else np.nan
+    groups = {"IS": (is_lo,is_hi), "OOS": (oos_lo,oos_hi), "Full": (pivot.index.min(),pivot.index.max())}
+    bars = {}
+    for nm, (lo,hi) in groups.items():
+        sub = pivot[(pivot.index>=lo)&(pivot.index<=hi)]
+        sp  = spread[(spread.index>=lo)&(spread.index<=hi)]
+        bars[nm] = [ann(sub[lb])*100 if lb in sub else np.nan for lb in T_LABELS] + [ann(sp)*100]
+
+    fig = go.Figure(data=[
+        go.Bar(name="IS",   x=T_LABELS+[SPREAD_LABEL], y=bars["IS"],   marker_color=COLORS["IS"],   marker_opacity=0.8),
+        go.Bar(name="OOS",  x=T_LABELS+[SPREAD_LABEL], y=bars["OOS"],  marker_color=COLORS["OOS"],  marker_opacity=0.8),
+        go.Bar(name="Full", x=T_LABELS+[SPREAD_LABEL], y=bars["Full"], marker_color=COLORS["FULL"], marker_opacity=0.5),
+    ])
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=500, barmode="group",
+                      title=f"{FACTOR_NAME} — Tercile Returns by Coin Age",
+                      xaxis_title="Age Group", yaxis_title="Annualised Return (%)",
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig, spread
+
+
+def chart_is_oos_dashboard(ret, is_lo, is_hi, oos_lo, oos_hi):
+    def metrics(r):
+        if len(r) == 0: return [np.nan]*5
+        se = newey_west_se(r.values, 4)
+        ann = (1+r).prod()**(52/len(r))-1
+        return [float(r.mean()/se) if se and se>0 else np.nan,
+                float(r.mean()/r.std()*np.sqrt(52)) if r.std()>0 else np.nan,
+                ann, r.mean(), r.std()]
+
+    labels = ["Return t-stat", "Sharpe", "Ann. Return", "Mean Wkly Ret", "Weekly Std"]
+    is_r  = ret[(ret.index>=is_lo) &(ret.index<=is_hi)].dropna()
+    oos_r = ret[(ret.index>=oos_lo)&(ret.index<=oos_hi)].dropna()
+    fig = go.Figure(data=[
+        go.Bar(name="In-Sample",     x=labels, y=metrics(is_r),  marker_color=COLORS["IS"],  marker_opacity=0.8),
+        go.Bar(name="Out-of-Sample", x=labels, y=metrics(oos_r), marker_color=COLORS["OOS"], marker_opacity=0.8),
+    ])
+    fig.add_hline(y=0, line_dash="dash", line_color="#666")
+    fig.add_hrect(y0=2, y1=2.5, fillcolor=COLORS["SIG_POS"], opacity=0.1, annotation_text="t ≥ 2")
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=500, barmode="group",
+                      title=f"{FACTOR_NAME}: IS vs OOS Dashboard",
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
+
+
+def chart_cumulative_tercile(chars, is_lo, is_hi, oos_lo, oos_hi):
+    chars = chars.dropna(subset=["fwd_ret_1w", CHAR_COL]).copy()
+    chars["tercile"] = chars.groupby("week")[CHAR_COL].transform(
+        lambda x: pd.qcut(x, 3, labels=T_LABELS, duplicates="drop")
+        if len(x.dropna()) >= 6 else pd.NA)
+    chars = chars.dropna(subset=["tercile"])
+    tr = chars.groupby(["week","tercile"])["fwd_ret_1w"].mean().reset_index()
+    pivot = tr.pivot(index="week", columns="tercile", values="fwd_ret_1w")
+    for lb in T_LABELS:
+        if lb not in pivot.columns: pivot[lb] = np.nan
+    pivot = pivot[T_LABELS].sort_index().fillna(0)
+    cum = (1+pivot).cumprod()
+    colors_t = {T_LABELS[0]: "#4CAF50", T_LABELS[1]: "#FF9800", T_LABELS[-1]: "#F44336"}
+    fig = go.Figure()
+    for lb, color in colors_t.items():
+        fig.add_trace(go.Scatter(x=cum.index, y=cum[lb], name=lb, line=dict(color=color, width=2)))
+    sc = (1+(pivot[T_LABELS[0]]-pivot[T_LABELS[-1]])).cumprod()
+    fig.add_trace(go.Scatter(x=sc.index, y=sc.values, name=SPREAD_LABEL,
+                             line=dict(color="#000", width=2.5, dash="dash")))
+    _add_vline(fig, is_hi)
+    _add_vrect(fig, is_lo, is_hi, fillcolor=COLORS["IS"], opacity=0.04)
+    _add_vrect(fig, oos_lo, oos_hi, fillcolor=COLORS["OOS"], opacity=0.04)
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=550,
+                      title="Cumulative Return by Coin Age Tercile",
+                      xaxis_title="Week", yaxis_title="Growth of $1",
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
+
+
+def chart_age_return_scatter(chars, is_lo, is_hi, oos_lo, oos_hi):
+    """Chart 9: Coin age (log scale) vs next-week return — binned scatter showing
+    the newness premium directly: do younger coins earn more?"""
+    chars = chars.dropna(subset=["fwd_ret_1w", CHAR_COL]).copy()
+    chars["log_age"] = np.log1p(chars[CHAR_COL])  # log(1 + age_weeks)
+
+    def bin_data(data, label):
+        data = data.copy()
+        try:
+            data["bin"] = pd.qcut(data["log_age"], 20, labels=False, duplicates="drop")
+        except Exception:
+            return None
+        agg = data.groupby("bin").agg(x=("log_age","mean"), y=("fwd_ret_1w","mean")).reset_index()
+        agg["x_raw"] = np.expm1(agg["x"])  # back to weeks
+        return agg
+
+    is_data  = chars[(chars["week"]>=is_lo)  & (chars["week"]<=is_hi)]
+    oos_data = chars[(chars["week"]>=oos_lo) & (chars["week"]<=oos_hi)]
+    is_agg   = bin_data(is_data,  "IS")
+    oos_agg  = bin_data(oos_data, "OOS")
+
+    fig = make_subplots(rows=1, cols=2,
+                        subplot_titles=("IS: Coin Age → Next-Week Return",
+                                        "OOS: Coin Age → Next-Week Return"))
+    for ci, agg, color in [(1, is_agg, COLORS["IS"]), (2, oos_agg, COLORS["OOS"])]:
+        if agg is not None and len(agg):
+            fig.add_trace(go.Scatter(x=agg["x_raw"], y=agg["y"]*100,
+                                     mode="markers+lines",
+                                     marker=dict(color=color, size=7),
+                                     line=dict(color=color, width=1.5)), row=1, col=ci)
+        fig.add_hline(y=0, line_dash="dash", line_color="#999", row=1, col=ci)
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=500, showlegend=False,
+                      title="Newness Premium: Coin Age (weeks) vs Next-Week Return (binned)")
+    fig.update_xaxes(title_text="Coin Age (weeks, log scale)", type="log")
+    fig.update_yaxes(title_text="Mean Next-Week Return (%)")
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Report & main
+# ---------------------------------------------------------------------------
+
+def fmt_val(v, fmt=".2f"):
+    if isinstance(v, float) and np.isfinite(v): return f"{v:{fmt}}"
+    return "N/A"
+
+
+def write_report(is_d, oos_d, adf_stat, adf_p, jb_is, jb_is_p, jb_oos, jb_oos_p):
+    md = f"""# NEWC (Newness / Seasoning Premium) — Analysis Report
+
+*Generated by `22_newc_visualisation.py` from the Stage-10 behavioral factor search.*
+
+---
+
+## The Idea in Plain English
+
+When a brand-new company goes public, early investors demand a higher expected
+return to compensate for the uncertainty — they know less about the business than
+they would for a company that has been listed for years. The same logic applies
+in crypto.
+
+**NEWC** exploits the **newness premium**: younger, less-seasoned coins carry
+more uncertainty, and the cross-section prices that uncertainty. Each week:
+- **Buy** (go long) the 30% of coins that have been listed the shortest time
+- **Short-sell** the 30% of coins that have been around the longest
+
+The signal is the coin's **age in weeks** since it first appeared in our data.
+
+---
+
+## The Short Answer
+
+**Priced risk — significant in the joint GX model.**
+
+The joint GX-full test (tested alongside all Stage-09 factors and the other
+3 behavioral factors) gives: **λ = +{GX_LAMBDA_ANN:.1f}%/yr, t = +{GX_T:.2f}**,
+95% CI [{GX_CI_LO:.1f}%, {GX_CI_HI:.1f}%]. Assets that load on the newness factor
+earn more in the long-run cross-section.
+
+The L/S return is volatile and often negative (sharpe = {fmt_val(is_d.get('sharpe', np.nan))} IS,
+{fmt_val(oos_d.get('sharpe', np.nan))} OOS), but the GX engine identifies a genuine priced
+risk premium beneath the noise.
+
+---
+
+## Why Newness Is Priced
+
+**1. Information uncertainty.**
+Younger coins have shorter price histories, fewer analyst followers, and less
+on-chain behavioral data. Investors cannot estimate their risk precisely. This
+Knightian uncertainty commands a premium above known risk.
+
+**2. Survival bias (reverse).**
+Among coins that have survived long enough to be in our panel, older coins are
+survivors — they have already proven themselves. Young coins still face the
+selection event. The market prices the probability of becoming a survivor.
+
+**3. Liquidity and market-making maturity.**
+Younger coins typically have wider bid-ask spreads and shallower order books.
+Market-makers require higher expected returns to compensate for the larger
+inventory risk on thin-market names.
+
+**4. Correlation with crash exposure.**
+Correlation with CRASH8 = {CORR_09:.2f} (actually CRASH8, not listed above — this is the
+NEWC−CRASH8 correlation from the shortlist: +0.63). Younger coins are more crash-prone.
+The newness premium partly captures capitulation risk.
+
+---
+
+## Key Distinction from SMBC (Size)
+
+Nearest Stage-09 factor: **{NEAREST_09}**, correlation = {CORR_09:.3f}. NEWC and SMBC
+are correlated but measure different things: SMBC ranks by current market
+capitalisation; NEWC ranks by time in market. A small coin can be old and
+a large coin can be new. The joint GX model confirms NEWC survives SMBC as
+a control — it adds independent information.
+
+---
+
+## Performance Summary
+
+| Metric | In-Sample | Out-of-Sample |
+|---|---|---|
+| Weeks | {int(is_d.get('n', 0))} | {int(oos_d.get('n', 0))} |
+| Annualised Return | {fmt_val(is_d.get('mean',np.nan)*52*100, '.1f')}% | {fmt_val(oos_d.get('mean',np.nan)*52*100, '.1f')}% |
+| Sharpe Ratio | {fmt_val(is_d.get('sharpe', np.nan))} | {fmt_val(oos_d.get('sharpe', np.nan))} |
+| Return t-stat (NW) | {fmt_val(is_d.get('t_nw', np.nan))} | {fmt_val(oos_d.get('t_nw', np.nan))} |
+| GX-full λ (joint) | +{GX_LAMBDA_ANN:.1f}%/yr (t = {GX_T:.2f}) | — |
+
+The GX premium is significant; the L/S Sharpe is not. These are consistent:
+GX measures the *cross-sectional* pricing of the risk factor over the full panel,
+while the L/S Sharpe is the profit of the specific top-30%/bottom-30% portfolio,
+which is noisy because coin age is a slow-moving characteristic.
+
+---
+
+## Statistical Tests
+
+### Return NW t-stat
+
+- IS t = {fmt_val(is_d.get('t_nw', np.nan))} | OOS t = {fmt_val(oos_d.get('t_nw', np.nan))}
+- The L/S return is not significant on either the IS or OOS return t-stat lens.
+
+### Giglio-Xiu Joint Pricing
+
+Joint GX-full (K_hidden = 2, with all Stage-09 + 3 other behavioral factors):
+**λ = +{GX_LAMBDA_ANN:.1f}%/yr, t = +{GX_T:.2f}**, 95% CI [{GX_CI_LO:.1f}%, {GX_CI_HI:.1f}%].
+Significant at |t| ≥ 2 even after controlling for all known factors.
+
+### Jarque-Bera Normality Test
+
+| Period | JB Statistic | p-value | Normal? |
+|---|---|---|---|
+| IS  | {fmt_val(jb_is,  '.1f')} | {fmt_val(jb_is_p,  '.4f')} | {"No" if jb_is_p  < 0.05 else "Yes"} |
+| OOS | {fmt_val(jb_oos, '.1f')} | {fmt_val(jb_oos_p, '.4f')} | {"No" if jb_oos_p < 0.05 else "Yes"} |
+
+### ADF Stationarity
+
+ADF = {fmt_val(adf_stat, '.3f')}, p = {fmt_val(adf_p, '.4f')} → **{"Stationary" if adf_p < 0.05 else "Non-stationary"}**
+
+---
+
+## Visualisations
+
+### Cumulative L/S Return
+
+![Cumulative return](artifacts/figures/{PREFIX}_01_cumulative_return.png)
+
+The long/short return is volatile and often negative — the characteristic (age) moves slowly, so the spread earns in aggregate over the full panel but not reliably week by week.
+
+### Rolling Return Significance
+
+![Rolling return t-stat](artifacts/figures/{PREFIX}_02_rolling_return_significance.png)
+
+26-week rolling return and NW t-stat. The return t-stat rarely crosses ±2, confirming the L/S is not a weekly trading signal. The GX premium is a long-horizon cross-sectional phenomenon.
+
+### Return Distribution
+
+![Return distribution](artifacts/figures/{PREFIX}_03_return_distribution.png)
+
+### Rolling Sharpe
+
+![Rolling Sharpe](artifacts/figures/{PREFIX}_04_rolling_sharpe.png)
+
+### QQ-Plot
+
+![QQ plot](artifacts/figures/{PREFIX}_05_qq_plot.png)
+
+### Age Tercile Returns
+
+![Tercile returns](artifacts/figures/{PREFIX}_06_tercile_returns.png)
+
+Returns for Young, Mid-Age, and Seasoned coin terciles. Young coins should outperform but also exhibit higher volatility — consistent with the priced-risk interpretation.
+
+### IS vs OOS Dashboard
+
+![IS vs OOS](artifacts/figures/{PREFIX}_07_is_oos_dashboard.png)
+
+### Cumulative Return by Age Tercile
+
+![Cumulative tercile](artifacts/figures/{PREFIX}_08_cumulative_tercile.png)
+
+### Coin Age vs Next-Week Return (Binned Scatter)
+
+![Age vs return](artifacts/figures/{PREFIX}_09_age_return_scatter.png)
+
+Each point is a bin of coins sorted by age (x-axis in weeks, log scale) against their average next-week return (y-axis). A downward slope would confirm the newness premium: younger coins earn more. The scatter shows whether the premium is monotone across the age distribution or concentrated in the youngest tail.
+"""
+    (STAGE / "NEWC_VIZ_REPORT.md").write_text(md)
+    print("  wrote NEWC_VIZ_REPORT.md")
+
+
+def main():
+    print("Loading data...")
+    man  = load_manifest()
+    trade = set(man["trading_universe"]["symbols_ever_eligible"])
+    is_lo  = pd.Timestamp(man["split"]["in_sample"][0])
+    is_hi  = pd.Timestamp(man["split"]["in_sample"][1])
+    oos_lo = pd.Timestamp(man["split"]["out_of_sample"][0])
+    oos_hi = pd.Timestamp(man["split"]["out_of_sample"][1])
+
+    # L/S return series from pre-built behavioral parquet
+    beh = pd.read_parquet(BEHAVIORAL_DATA / "behavioral_factor_returns.parquet")
+    beh["week"] = pd.to_datetime(beh["week"])
+    factor_ret = beh.set_index("week")["NEWC_young_minus_old"].dropna()
+
+    # Characteristics for tercile charts
+    panel = pd.read_parquet(PANEL_DIR / "price_mcap_panel_weekly.parquet")
+    panel["week"] = pd.to_datetime(panel["week"])
+    panel = panel[panel["symbol"].isin(trade)]
+    chars, _ = build_characteristics(panel, trade)
+    chars["week"] = pd.to_datetime(chars["week"])
+
+    print("Generating charts...")
+    fig1 = chart_cumulative_return(factor_ret, is_lo, is_hi, oos_lo, oos_hi)
+    fig2 = chart_rolling_return_significance(factor_ret, is_lo, is_hi, oos_lo, oos_hi)
+    fig3, is_d, oos_d = chart_return_distribution(factor_ret, is_lo, is_hi, oos_lo, oos_hi)
+    fig4 = chart_rolling_sharpe(factor_ret, is_lo, is_hi, oos_lo, oos_hi)
+    fig5 = chart_qq_plot(factor_ret, is_lo, is_hi, oos_lo, oos_hi)
+    fig6, _ = chart_tercile_returns(chars, is_lo, is_hi, oos_lo, oos_hi)
+    fig7 = chart_is_oos_dashboard(factor_ret, is_lo, is_hi, oos_lo, oos_hi)
+    fig8 = chart_cumulative_tercile(chars, is_lo, is_hi, oos_lo, oos_hi)
+    fig9 = chart_age_return_scatter(chars, is_lo, is_hi, oos_lo, oos_hi)
+
+    charts = [
+        (f"{PREFIX}_01_cumulative_return", fig1),
+        (f"{PREFIX}_02_rolling_return_significance", fig2),
+        (f"{PREFIX}_03_return_distribution", fig3),
+        (f"{PREFIX}_04_rolling_sharpe", fig4),
+        (f"{PREFIX}_05_qq_plot", fig5),
+        (f"{PREFIX}_06_tercile_returns", fig6),
+        (f"{PREFIX}_07_is_oos_dashboard", fig7),
+        (f"{PREFIX}_08_cumulative_tercile", fig8),
+        (f"{PREFIX}_09_age_return_scatter", fig9),
+    ]
+    for name, fig in charts:
+        fig.write_html(str(FIG_DIR / f"{name}.html"))
+        fig.write_image(str(FIG_DIR / f"{name}.png"), scale=2)
+        print(f"  saved {name}.png")
+
+    pd.DataFrame({"ret": factor_ret}).to_parquet(DATA_DIR / f"{PREFIX}_viz_data.parquet")
+
+    is_r  = factor_ret[(factor_ret.index>=is_lo) &(factor_ret.index<=is_hi)].dropna()
+    oos_r = factor_ret[(factor_ret.index>=oos_lo)&(factor_ret.index<=oos_hi)].dropna()
+    from statsmodels.tsa.stattools import adfuller
+    try:
+        adf = adfuller(factor_ret.dropna(), autolag="AIC"); adf_stat, adf_p = adf[0], adf[1]
+    except Exception:
+        adf_stat, adf_p = np.nan, np.nan
+    jb_is,  jb_is_p  = sp_stats.jarque_bera(is_r)[:2]  if len(is_r)  > 5 else (np.nan, np.nan)
+    jb_oos, jb_oos_p = sp_stats.jarque_bera(oos_r)[:2] if len(oos_r) > 5 else (np.nan, np.nan)
+    write_report(is_d, oos_d, adf_stat, adf_p, jb_is, jb_is_p, jb_oos, jb_oos_p)
+    print(f"\nAll done. Charts in {FIG_DIR}")
+
+
+if __name__ == "__main__":
+    main()

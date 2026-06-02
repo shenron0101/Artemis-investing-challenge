@@ -1,3 +1,11 @@
+"""Data-collection pipeline orchestration.
+
+Defines the staged ingestion pipeline driven by `main.py`: it pulls market and
+on-chain data through the provider clients in `clients.py`, cleans and aligns it
+to a weekly cadence, and writes the cleaned parquet/CSV panels to
+`data/clean/`. Configuration (universe, providers, windows) is read from
+`config/settings.yaml`.
+"""
 from __future__ import annotations
 
 import logging
