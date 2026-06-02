@@ -76,21 +76,16 @@ reports/*.html
 
 # Exception: figures embedded in the competition report
 !figures/*.png
+!16_reports/figures/*.png
 
-# Research PDFs are large local source documents; keep notes/scripts in git.
-02_Research/*.pdf
+# Exception: figures regenerated from metrics.json for the report
+!14_regime_factor_strategy/artifacts/figures/*.png
+!15_factor_ensemble_strategy/artifacts/figures/*.png
 
-# Paper-reproduction generated outputs. Source scripts and REPORT.md stay tracked.
-04_factors/figures/
-05_btc_direction/artifacts/
-05_btc_direction/figures/
+# Stage 06 artifacts are gitignored (regenerable from 01_Data_Collection)
 06_artemis_econometrics/artifacts/
 06_artemis_econometrics/figures/
-07_hidden_factor_pricing/artifacts/
-07_hidden_factor_pricing/figures/
-!05_btc_direction/artifacts/**/.gitkeep
 !06_artemis_econometrics/artifacts/**/.gitkeep
-!07_hidden_factor_pricing/artifacts/**/.gitkeep
 
 # Data artifacts — CSV/parquet are large and regenerable, kept out of version control
 *.csv
