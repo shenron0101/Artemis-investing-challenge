@@ -1,75 +1,112 @@
-# Artemis Quant Competition — Track 1: Crypto Factor Rebalancing Strategy
+# Artemis Quant Competition — Track 1: Code Submission
 
-A systematic, weekly-rebalanced long–short crypto factor portfolio over ~113
-large-cap assets. The goal is cross-sectional ranking power, regime robustness,
-turnover control, and economic interpretability — not single-asset prediction.
+Companion code for the report `16_reports/Artemis_Track1_Report.tex` (rendered:
+`Artemis_Track1_Report.pdf`; long-form Markdown/DOCX versions are also in
+`16_reports/`).
 
-The final competition deliverable is **`Artemis_Track1_Research_Report.md`**
-(and its `.docx` build). This README documents the pipeline and, in particular,
-how factors flow from discovery to the final strategy — the trace the audit
-(`AUDIT_AND_FINDINGS_REPORT.md`, Finding 12) found was undocumented.
+The report is a systematic, weekly-rebalanced long-short crypto factor
+portfolio over ~113 large-cap assets. This package contains every script
+needed to reproduce the report's numbers and figures, organised by report
+flow.
 
-## Production pipeline (Stages 09 → 10 → 12 → 15)
+## Repository layout
 
-These four stages produce everything in the final report. Earlier stages
-(01–08, in their folders) are data collection and prior research iterations;
-Stages 13–14 are regime-experiment appendices.
+| Folder | Report section it serves | Contents |
+|---|---|---|
+| `01_Data_Collection/` | Universe, data, design choices | Public-API loaders (Binance, CoinGecko, Artemis, DeFiLlama). Cleaned parquets are gitignored — regenerate locally. |
+| `06_artemis_econometrics/` | upstream of Stage 08 | Build scripts that produce `characteristics.parquet` consumed by `08_nalfp/01_network_dynamics.py`. |
+| `08_nalfp/` | upstream of Stages 13, 14 | Only the **network-panel producer** (`_common.py`, `01_network_dynamics.py`) is shipped. It writes `network_panel.parquet`, consumed by Stages 12 (NetMom/NetRel viz), 13, 14. |
+| `09_nalfp_add/` | §3 Universe / §4 Factor discovery / §5 Master evidence | Production pipeline: universe + reconstructed mcap, weekly returns, Sparse-PCA, factor validation (IC/ASD/GX), MispricingM composite. |
+| `10_behavioral_gx/` | §5 Behavioral factors | 182-candidate behavioral factor search with Bonferroni + Benjamini-Hochberg corrections → CRASH8, BETA26, SKEW52, NEWC. |
+| `12_factor_viz/` | §5 Selected exhibits | Per-factor dashboards. The PNGs `\includegraphics`'d in §5 of the report live here. |
+| `13_rcfp/` | Appendix A — Regime conditioning | Plan A (economic classifier) and Plan B (HMM). |
+| `14_regime_factor_strategy/` | Appendix B — ML lessons | XGBoost regime classifier and optimizer variants. Stage 15 imports `run.py` directly. |
+| `15_factor_ensemble_strategy/` | §6 Final strategy / §7 Backtest / §7.1 Ablation | Three-book ensemble, causal allocator, regime sizing, ablation grid. |
+| `16_reports/` | the report itself | `.tex`, `.pdf`, `.md`, `.docx`. |
+| `figures/`, `16_reports/figures/` | §5, §6 figures | `network_clusters.png`, `netmom_netrel_schematic.png`, `factor_routing_graph.png`, plus the `image2/4/5/6.png` set the LaTeX report `\includegraphics`. |
+| `submission_assets/` | reproducibility helper | `regenerate_report_figures.py` — see below. |
 
-| Stage | Folder | Produces | Consumed by |
-|---|---|---|---|
-| 09 | `09_nalfp_add/` | 5-year universe + reconstructed mcap panel, weekly returns, Sparse-PCA factors, **factor validation (IC / ASD / GX)**, MispricingM composite | 10, 12, 15 |
-| 10 | `10_behavioral_gx/` | 182-candidate behavioral factor search + GX pricing → 4 selected priced-risk factors (CRASH8, BETA26, SKEW52, NEWC) | 12, 15 |
-| 12 | `12_factor_viz/` | Per-factor visualizations + plain-language `RESULTS.md` (presentation layer over 09/10 numbers) | report figures |
-| 15 | `15_factor_ensemble_strategy/` | Three-book ensemble (MispricingM / Core Rank / Priced Tilt), causal allocator, backtest, ablations | report |
-
-Run order:
+## Run order
 
 ```bash
-# Stage 09 — data + validation (03 fetches live Binance/CoinGecko/CoinMetrics)
+# 0. Credentials. Required for the live data fetch in step 1.
+#    Copy .env.example to ~/.hermes/.env and fill in:
+#    ARTEMIS_API_KEY, COINGECKO_API_KEY, FRED_API_KEY.
+
+# 1. Build the cleaned universe parquets in 01_Data_Collection/data/clean/.
+python3 01_Data_Collection/src/main.py
+
+# 2. Build the upstream characteristics panel.
+python3 06_artemis_econometrics/01_build_panel.py
+python3 06_artemis_econometrics/02_characteristics.py
+
+# 3. Build the network panel that Stages 12/13/14 read.
+python3 08_nalfp/01_network_dynamics.py
+
+# 4. Production pipeline (Stage 09 → 10 → 12).
 python3 09_nalfp_add/03_reconstruct_mcap_panel.py
 python3 09_nalfp_add/05_returns_and_reference.py
 python3 09_nalfp_add/06_sparse_pca.py
-python3 09_nalfp_add/09c_gx_pricing_full.py     # proper week-by-week FMB (NOT 09_gx_pricing.py)
-python3 09_nalfp_add/08_factor_validation.py    # IC + ASD (IS/full/OOS) + MispricingM
-# Stage 10 — behavioral search with FDR + IS/OOS robustness
+python3 09_nalfp_add/09c_gx_pricing_full.py       # NOT 09_gx_pricing.py — deprecated
+python3 09_nalfp_add/08_factor_validation.py
 python3 10_behavioral_gx/01_behavioral_gx_search.py
-# Stage 15 — ensemble (imports Stage 14 run.py + reads its factor/regime panels)
+
+# 5. Optional appendix stages (independent — both feed Appendix A/B).
+python3 13_rcfp/a02_run_strategy.py
+python3 13_rcfp/b02_run_strategy.py
+python3 14_regime_factor_strategy/run.py
+
+# 6. Final ensemble strategy and backtest.
 python3 15_factor_ensemble_strategy/run.py
 ```
 
-`09_gx_pricing.py` is **deprecated** (single-cross-section FMB shortcut with
-wrong standard errors); all reported GX t-stats come from `09c_gx_pricing_full.py`.
+`09_nalfp_add/09_gx_pricing.py` is **deprecated** (it uses a single-cross-section
+Fama-MacBeth shortcut with the wrong standard errors). The file carries a
+runtime deprecation banner and is retained only for historical comparison —
+every GX t-statistic in the report comes from `09c_gx_pricing_full.py`.
 
-## How factors are selected (the 182 → 4 trace)
+## What ships vs. what regenerates
 
-1. **Stage 09** validates a panel of economic factors on three lenses: weekly
-   ranking power (IC), distributional dominance over Bitcoin (ASD, reported for
-   IS / full / OOS windows), and Giglio-Xiu risk pricing. The factors that
-   ASD-dominate BTC form the **MispricingM** composite (RMOM1w, RMOM2w, SMBC,
-   NetRel). VolC and MAXRET are the IC-robust **Core Rank** factors.
-2. **Stage 10** searches 182 price-only behavioral specifications, pricing each
-   with the Stage-09 GX engine. 102 clear an uncorrected |t| ≥ 2.0 bar — read as
-   exploratory mining. The four carried forward (CRASH8, BETA26, SKEW52, NEWC)
-   survive a **Bonferroni** correction (|t| > 3.64) and **Benjamini-Hochberg**
-   FDR (q < 0.001) across all 182 tests, and are re-priced on separate IS/OOS
-   windows. They are used only as a small **capped Priced-Tilt sleeve**, never as
-   core alpha, because their standalone single-window premia are weak.
-3. **Stage 15** assigns each factor group to a sub-book and allocates between the
-   books with a causal rolling-performance rule plus regime sizing.
+The following artifacts are committed and the report uses them directly:
 
-## Audit remediation
+- All Stage 12 per-factor dashboards (`12_factor_viz/**/artifacts/figures/*.png`).
+- The Stage 15 metrics manifest (`15_factor_ensemble_strategy/artifacts/manifests/metrics.json`) — contains every Sharpe/return/vol/drawdown number quoted in §7 and the sensitivity grid.
+- Stage 09/10/13/14 manifests with the corresponding numbers.
+- All LaTeX figures (`figures/*.png`, `16_reports/figures/*.png`).
 
-The findings raised in `AUDIT_AND_FINDINGS_REPORT.md` for Stages 09/10/12/15 are
-resolved in code and in the stage `RESULTS.md` files; a per-finding summary is in
-**Appendix D** of the final report. Highlights: multiple-testing corrections
-(Findings 1–2), supply-clip fix (3), IS/OOS ASD split (4), regime-tilt
-documentation + sensitivity grid (5), Priced-Tilt ablation showing it is a net OOS
-drag (6), FMB deprecation (8), leakage-free fill (9), and this pipeline doc (12).
+The four pipeline-output figures the long-form Markdown report references
+(`15_factor_ensemble_strategy/artifacts/figures/cumulative_returns.png`,
+`sharpe_ensemble_book_allocations.png`,
+`balanced_ensemble_book_allocations.png`, and
+`14_regime_factor_strategy/artifacts/figures/xgboost_regimes.png`) cannot be
+regenerated faithfully without the live data fetch in step 1. They are
+reproduced from the committed `metrics.json` by:
 
-## Key result
+```bash
+python3 submission_assets/regenerate_report_figures.py
+```
 
-Out-of-sample (final 79 weeks, a bull→bear transition) the Sharpe Ensemble holds
-+0.84 Sharpe / +29.9% annualized while Bitcoin (−0.33) and the equal-weight market
-(−0.51) both lose money. Ablations show the priced-risk sleeve is a net drag
-(removing it lifts OOS Sharpe to +0.90) and the ensemble is effectively a
-single-factor (MispricingM) strategy — both stated openly in the report.
+The Stage 15 figures rendered this way use the **exact** numbers from §7 of
+the report (Tables 5 and 10). The Stage 14 `xgboost_regimes.png` is rendered
+as a labelled schematic because weekly regime probabilities are not stored in
+the committed manifest — re-run step 5 above to produce the true probability
+path.
+
+## Credentials and large data
+
+`.env.example` shows the API key shape expected at `~/.hermes/.env`. The
+clean panels live in `01_Data_Collection/data/clean/` and are gitignored;
+they regenerate from step 1.
+
+## Key result (for orientation)
+
+Out-of-sample (final 79 weeks, a bull→bear transition):
+
+| Strategy | Sharpe | Annual return | Max drawdown |
+|---|---:|---:|---:|
+| Sharpe Ensemble | +0.84 | +29.9% | -24.7% |
+| Bitcoin | -0.33 | -12.3% | -46.7% |
+| Equal-weight market | -0.51 | -34.4% | -68.3% |
+
+Full results, including in-sample, full-window, ablations, and sensitivity
+grid, are in §7 of the report and `15_factor_ensemble_strategy/RESULTS.md`.
