@@ -1,3 +1,9 @@
+"""HTTP clients for the public data providers used by the pipeline.
+
+Thin wrappers around the Binance, CoinGecko, Artemis, and DeFiLlama (incl.
+stablecoins) REST APIs, with retry/backoff handling. Consumed by
+`pipeline.py`; API keys are read from the repo-root `.env`.
+"""
 from __future__ import annotations
 
 import time

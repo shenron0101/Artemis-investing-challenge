@@ -1,7 +1,0 @@
-xgboost
-scikit-learn
-pandas
-numpy
-matplotlib
-plotly
-pyarrow
