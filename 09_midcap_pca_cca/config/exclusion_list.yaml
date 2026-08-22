@@ -1,0 +1,66 @@
+stablecoins:
+  - USDT
+  - USDC
+  - DAI
+  - BUSD
+  - UST
+  - FRAX
+  - TUSD
+  - USDP
+  - USDN
+  - LUSD
+  - GUSD
+  - HUSD
+  - MIM
+  - PAX
+  - SAI
+  - USDD
+  - USDX
+  - EURS
+  - XAUT
+  - PAXG
+  - USDS
+  - USD0
+  - USDY
+  - USYC
+  - RUSD
+  - DAI
+
+wrapped_tokens:
+  - WBTC
+  - WETH
+  - WBNB
+  - WMATIC
+  - WAVAX
+  - WFTM
+  - stETH
+  - wstETH
+  - rETH
+  - cbETH
+
+bridged_tokens:
+  - BTCB
+  - POL
+  - MATIC
+  - ANY
+  - renBCH
+  - renBTC
+
+aggregate_indices:
+  - TOTAL
+  - ALTCOIN
+  - DEFI
+  - BLOCK
+  - TRADFI
+  - CHARLES_SCHWAB
+  - NASDAQ100
+  - SPY
+  - VOO
+  - QQQ
+
+notes: |
+  Manual exclusion list for stablecoins, wrapped tokens, bridged tokens, and aggregate/indices.
+  These are excluded from universe ranking regardless of market cap.
+  Maintained separately from CoinGecko categories to avoid retroactive changes.
+  Aggregate indices (total, altcoin, defi, block) are Artemis composite metrics, not individual tokens.
+  Charles Schwab is a TradFi equity token, not a cryptocurrency.

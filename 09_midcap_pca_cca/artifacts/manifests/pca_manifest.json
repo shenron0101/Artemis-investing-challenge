@@ -1,0 +1,14 @@
+{
+  "window_weeks": 12,
+  "halflife_weeks": 4,
+  "rmt_denoising": true,
+  "sign_alignment": true,
+  "n_permutations": 100,
+  "alpha": 0.05,
+  "n_weeks_processed": 268,
+  "output_files": [
+    "pca_scores.parquet",
+    "pca_loadings.parquet",
+    "pca_diagnostics.parquet"
+  ]
+}

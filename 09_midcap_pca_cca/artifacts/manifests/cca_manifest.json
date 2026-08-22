@@ -1,0 +1,25 @@
+{
+  "n_components": 1,
+  "x_variables": [
+    "PC1"
+  ],
+  "y_variables": [
+    "BTC_return"
+  ],
+  "n_observations": 262,
+  "canonical_correlations": [
+    0.08700148009250669
+  ],
+  "permutation_p_values": [
+    0.193
+  ],
+  "wilks_lambda": {
+    "wilks_lambda": NaN,
+    "f_stat": NaN,
+    "p_value": NaN,
+    "df1": NaN,
+    "df2": NaN
+  },
+  "rolling_window_weeks": 52,
+  "n_permutations": 1000
+}
